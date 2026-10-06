@@ -1,16 +1,36 @@
 // All settings come from environment variables (set them in Railway → Variables).
 // Nothing here reads files from your computer.
 
+// Clean up common paste mistakes: surrounding spaces or quotes.
+function clean(v) {
+  if (!v) return '';
+  return v.trim().replace(/^["']|["']$/g, '').trim();
+}
+
 function required(name) {
-  const v = process.env[name];
+  const v = clean(process.env[name]);
   if (!v) throw new Error(`Missing environment variable ${name}. Add it in Railway → Variables.`);
   return v;
 }
 
+// Accepts the URL with or without /rest/v1/, extra spaces, or other text on the same line.
+function supabaseUrl() {
+  const raw = required('SUPABASE_URL');
+  const m = raw.match(/https:\/\/[a-z0-9-]+\.supabase\.(co|in)/i);
+  if (!m) {
+    throw new Error(`SUPABASE_URL doesn't look right. It should be exactly like https://yourproject.supabase.co ` +
+      `(it currently starts with "${raw.slice(0, 30)}" and is ${raw.length} characters long).`);
+  }
+  return m[0];
+}
+
+// Keys never contain spaces; take the first word in case other text got pasted on the same line.
+const key = (name) => required(name).split(/\s+/)[0];
+
 export const config = {
-  supabaseUrl: required('SUPABASE_URL'),
-  supabaseServiceKey: required('SUPABASE_SERVICE_ROLE_KEY'),
-  anthropicKey: required('ANTHROPIC_API_KEY'),
+  supabaseUrl: supabaseUrl(),
+  supabaseServiceKey: key('SUPABASE_SERVICE_ROLE_KEY'),
+  anthropicKey: key('ANTHROPIC_API_KEY'),
 
   // Model choices. Fast/cheap model for routine work, stronger model for planning & design.
   model: process.env.CLAUDE_MODEL || 'claude-sonnet-5-5',
@@ -24,13 +44,13 @@ export const config = {
   },
   webSearchPrice: 0.01, // $10 per 1,000 searches
 
-  googleApiKey: process.env.GOOGLE_API_KEY || '',
+  googleApiKey: clean(process.env.GOOGLE_API_KEY).split(/\s+/)[0],
 
   // Your business identity. Required by law (CAN-SPAM) in every outreach email.
   business: {
-    name: process.env.BUSINESS_NAME || '',
-    senderName: process.env.SENDER_NAME || '',
-    address: process.env.BUSINESS_ADDRESS || '',
+    name: clean(process.env.BUSINESS_NAME),
+    senderName: clean(process.env.SENDER_NAME),
+    address: clean(process.env.BUSINESS_ADDRESS),
     website: process.env.BUSINESS_WEBSITE || '',
     phone: process.env.BUSINESS_PHONE || '',
   },

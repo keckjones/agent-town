@@ -1,0 +1,83 @@
+// Mayor Mae: looks at the whole town, decides what everyone should do next, and queues the work.
+import { db, say, enqueue, getSettings, addDocument, startOfToday } from '../lib/db.js';
+import { askJSON, spentToday } from '../lib/claude.js';
+import { emailReady } from '../config.js';
+
+// What the manager is allowed to assign. Keep in sync with agents/index.js.
+export const ASSIGNABLE = {
+  research: { kinds: ['research'], input: '{"topic": "a specific research question"}' },
+  scout: { kinds: ['find_prospects'], input: '{"category": "e.g. hair salon", "limit": 10}' },
+  merchant: { kinds: ['create_product'], input: '{"idea": "optional product idea"}' },
+  marketer: { kinds: ['plan_campaign'], input: '{"focus": "what the campaign should achieve"}' },
+  social: { kinds: ['write_posts'], input: '{"theme": "...", "count": 3}' },
+};
+
+const SYSTEM = `You are the manager of a small team of AI agents running a one-person online business.
+Your job: move the business toward its weekly revenue goal with the least wasted effort and money.
+Priorities: (1) the local website-redesign outreach pipeline, which earns fastest; (2) research that sharpens offers;
+(3) products, marketing, and social posts once there is something worth promoting.
+Don't pile up work: if many approvals are waiting for the owner, create fewer new drafts and say so.
+Stay within the daily budget. Only assign tasks from the allowed list.`;
+
+async function snapshot() {
+  const settings = await getSettings();
+  const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+  const [stages, approvals, revenue, queued, failed, docs] = await Promise.all([
+    db.from('prospects').select('stage'),
+    db.from('approvals').select('kind, status').in('status', ['pending', 'approved']),
+    db.from('revenue').select('amount').gte('received_at', weekAgo),
+    db.from('tasks').select('agent_id').in('status', ['queued', 'running']),
+    db.from('tasks').select('agent_id, kind, error').eq('status', 'failed').gte('finished_at', startOfToday()).limit(10),
+    db.from('documents').select('kind, title, created_at').order('created_at', { ascending: false }).limit(12),
+  ]);
+  const tally = (rows, key) => (rows || []).reduce((m, r) => ((m[r[key]] = (m[r[key]] || 0) + 1), m), {});
+  return {
+    settings: {
+      weekly_goal: settings.weekly_goal, daily_budget_usd: settings.daily_budget_usd, city: settings.outreach_city,
+      categories: settings.outreach_categories, business_focus: settings.business_focus, owner_notes: settings.manager_notes,
+    },
+    spent_today_usd: Number((await spentToday()).toFixed(2)),
+    revenue_last_7_days: (revenue.data || []).reduce((s, r) => s + Number(r.amount), 0),
+    outreach_email_configured: emailReady(),
+    prospect_pipeline: tally(stages.data, 'stage'),
+    approvals_waiting_on_owner: tally(approvals.data, 'kind'),
+    tasks_in_queue_by_agent: tally(queued.data, 'agent_id'),
+    failures_today: failed.data || [],
+    recent_documents: docs.data || [],
+    now: new Date().toString(),
+  };
+}
+
+export const handlers = {
+  async plan(task) {
+    await say('manager', 'Calling a town meeting to review progress...');
+    const state = await snapshot();
+    const allowed = Object.entries(ASSIGNABLE).map(([a, v]) => `- agent "${a}", kind "${v.kinds[0]}", input ${v.input}`).join('\n');
+
+    const plan = await askJSON({
+      agentId: 'manager', system: SYSTEM, maxTokens: 3000,
+      prompt: `Current state of the business (JSON):\n${JSON.stringify(state, null, 2)}
+
+Allowed task types:\n${allowed}
+
+Decide the next batch of work (at most 8 tasks). Return JSON:
+{"summary": "2-4 sentence status update for the owner", "focus_today": "one line", "owner_actions": ["things only the owner can do, e.g. approve emails"],
+"tasks": [{"agent": "...", "kind": "...", "input": {...}, "priority": 1-9, "reason": "..."}]}`,
+    });
+
+    let queued = 0;
+    for (const t of (plan.tasks || []).slice(0, 8)) {
+      const spec = ASSIGNABLE[t.agent];
+      if (!spec || !spec.kinds.includes(t.kind)) continue;
+      await enqueue(t.agent, t.kind, { ...(t.input || {}), reason: t.reason }, { priority: t.priority ?? 5 });
+      queued++;
+    }
+
+    const md = [`**Focus:** ${plan.focus_today}`, '', plan.summary, '',
+      '**Needs you:**', ...(plan.owner_actions || []).map((a) => `- ${a}`), '',
+      '**Assigned:**', ...(plan.tasks || []).map((t) => `- ${t.agent}: ${t.kind}, ${t.reason}`)].join('\n');
+    await addDocument('manager', 'manager_plan', `Town meeting: ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`, md, { state, plan });
+    await say('manager', `${plan.focus_today} (${queued} tasks assigned)`, 'success');
+    return { queued, summary: plan.summary };
+  },
+};

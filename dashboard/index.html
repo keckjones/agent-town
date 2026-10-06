@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Agent Town</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Pixelify+Sans:wght@500;600&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="town.js"></script>
+  <script src="store.js"></script>
+  <script src="app.js"></script>
+</head>
+<body>
+  <!-- Sign in -->
+  <div class="login" id="login" hidden>
+    <form id="login-form">
+      <h1>Agent Town</h1>
+      <p class="muted light" style="margin:0">Sign in to see your town.</p>
+      <label>Email<input id="login-email" type="email" autocomplete="email" required></label>
+      <label>Password<input id="login-pass" type="password" autocomplete="current-password" required></label>
+      <div class="err" id="login-err"></div>
+      <button class="btn go">Enter town</button>
+    </form>
+  </div>
+
+  <!-- The town -->
+  <div id="app" hidden>
+    <div class="demo-banner" id="demo-banner" hidden>Demo town with sample data. Connect Supabase to see your real agents.</div>
+    <header class="hud">
+      <div class="brand"><span class="dot" id="online"></span>Agent Town</div>
+      <div class="meter"><div class="meter-label" id="rev-text"></div><div class="bar"><i id="rev-bar"></i></div></div>
+      <div class="meter" style="flex-basis:180px"><div class="meter-label" id="spend-text"></div><div class="bar spend"><i id="spend-bar"></i></div></div>
+      <div class="hud-actions">
+        <button class="btn gold" id="inbox-btn">Approvals<span class="badge" id="inbox-count"></span></button>
+        <button class="btn stop" id="pause-btn">Pause all</button>
+        <button class="btn" id="signout">Sign out</button>
+      </div>
+    </header>
+    <main class="main">
+      <div class="town-wrap">
+        <canvas id="town" aria-label="Pixel town where each building is an agent. Click a building or a character for details."></canvas>
+        <div class="overlay" id="overlay"></div>
+      </div>
+      <aside class="board" id="board" aria-live="polite"></aside>
+    </main>
+  </div>
+
+  <!-- Approval inbox -->
+  <div class="modal" id="inbox" hidden>
+    <div class="modal-box" role="dialog" aria-label="Approval inbox">
+      <div class="modal-head"><h2>Approval inbox</h2><button class="btn small" id="inbox-close">Close</button></div>
+      <p class="muted light" style="margin:0">Nothing leaves the town without your yes. Edit anything before approving.</p>
+      <div class="tabs" id="inbox-tabs"></div>
+      <div class="stack" id="inbox-list"></div>
+    </div>
+  </div>
+</body>
+</html>

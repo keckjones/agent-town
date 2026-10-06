@@ -1,8 +1,7 @@
-// Paste your Supabase project URL and ANON (public) key here.
-// Supabase → Project Settings → API. The anon key is safe to publish: the database
-// only lets signed-in users in. NEVER put the service_role key in this file.
-// Leave these blank to see the demo town with sample data.
+// Your Supabase project URL and PUBLISHABLE (public) key.
+// The publishable key is safe to be public: the database only lets signed-in users in.
+// NEVER put the secret key in this file.
 window.TOWN_CONFIG = {
-  supabaseUrl: '',
-  supabaseAnonKey: '',
+  supabaseUrl: 'https://akzllrtkuszszkysvyvs.supabase.co',
+  supabaseAnonKey: 'sb_publishable_WbT-PqgugTSsJjeOnyRjww_4U3a6tQt',
 };

@@ -51,17 +51,26 @@ export const config = {
     name: clean(process.env.BUSINESS_NAME),
     senderName: clean(process.env.SENDER_NAME),
     address: clean(process.env.BUSINESS_ADDRESS),
-    website: process.env.BUSINESS_WEBSITE || '',
-    phone: process.env.BUSINESS_PHONE || '',
+    website: clean(process.env.BUSINESS_WEBSITE),
+    phone: clean(process.env.BUSINESS_PHONE),
+    // Public contact address shown in every message and used for replies.
+    email: clean(process.env.BUSINESS_EMAIL) || 'agentickj@gmail.com',
   },
 
-  // Outreach email (fill these once your outreach domain + mailbox exist).
+  // Sending mailbox. Defaults to the Gmail account agentickj@gmail.com;
+  // only SMTP_PASS (a Google App Password) has to be added in Railway.
   smtp: {
-    host: process.env.SMTP_HOST || '',           // Google Workspace: smtp.gmail.com
-    port: Number(process.env.SMTP_PORT || 465),
-    user: process.env.SMTP_USER || '',           // you@your-outreach-domain.com
-    pass: process.env.SMTP_PASS || '',           // Google: an App Password
-    from: process.env.SMTP_FROM || '',           // "Your Name <you@your-outreach-domain.com>"
+    host: clean(process.env.SMTP_HOST) || 'smtp.gmail.com',
+    port: Number(clean(process.env.SMTP_PORT) || 465),
+    user: clean(process.env.SMTP_USER) || 'agentickj@gmail.com',
+    // Google shows app passwords in groups of four ("abcd efgh ..."); spaces are removed.
+    pass: clean(process.env.SMTP_PASS).replace(/\s+/g, ''),
+    from: clean(process.env.SMTP_FROM) || '',
+  },
+  // Reading replies from the same mailbox (Gmail IMAP uses the same App Password).
+  imap: {
+    host: clean(process.env.IMAP_HOST) || 'imap.gmail.com',
+    port: Number(clean(process.env.IMAP_PORT) || 993),
   },
 
   // Optional: Shopify store for the Merchant agent to publish to (as drafts).
@@ -75,6 +84,11 @@ export const config = {
   timezone: process.env.TZ || 'America/Chicago',
 };
 
+if (!config.smtp.from) {
+  const who = config.business.senderName || config.business.name;
+  config.smtp.from = who ? `${who} <${config.smtp.user}>` : config.smtp.user;
+}
+
 export const emailReady = () =>
-  !!(config.smtp.host && config.smtp.user && config.smtp.pass && config.smtp.from &&
+  !!(config.smtp.host && config.smtp.user && config.smtp.pass &&
      config.business.name && config.business.address);

@@ -1,8 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
+import ws from 'ws';
 import { config } from '../config.js';
 
 export const db = createClient(config.supabaseUrl, config.supabaseServiceKey, {
   auth: { persistSession: false },
+  // Node 20 has no built-in WebSocket; give Supabase the 'ws' package instead.
+  realtime: { transport: ws },
 });
 
 export const BUCKET = 'town-files';

@@ -1,154 +1,125 @@
-# Agent Town
+# KJ Agentic Command Center
 
-Nine AI agents that run a small online business from the cloud, and a pixel-art town where you watch them work.
+A team of AI agents that runs several small businesses from the cloud, and a 3D trading floor where you watch them work.
 
-| Building | Agent | What it does |
-|---|---|---|
-| Town Hall | **Mayor Mae** (manager) | Every 3 hours: reviews the whole business, decides what's next, assigns tasks |
-| Library | **Librarian Lou** | Market research with live web search; writes reports |
-| Scout's Lodge | **Scout Sam** | Finds local businesses in College Station via Google Places |
-| Inspector | **Inspector Ida** | Visits each business website, screenshots it on a phone, scores it, finds a contact email |
-| Workshop | **Builder Bea** | Designs a new homepage for the best prospects and makes a before/after image |
-| Post Office | **Postmaster Pete** | Drafts a short outreach email with the before/after attached; sends it once you approve |
-| General Store | **Merchant Mo** | Drafts product listings (creates Shopify drafts if you connect a store) |
-| Billboard | **Barker Ben** | Plans marketing campaigns and hands post ideas to the Crier |
-| Town Square | **Crier Cleo** | Writes social media posts for your approval |
+- **Worker** (Railway, runs 24/7): the agents, the task queue, the approval executor, webhooks, the 7:30 AM text.
+- **Database** (Supabase): every task, workflow, approval, order, ledger row and event.
+- **Command center** (Vercel, static site): the trading floor, the panels, and every control.
 
-**Nothing leaves the town without your approval.** Emails, posts, and listings wait in the approval inbox. You can edit them, then approve or reject from any device.
+Your computer isn't involved once it's set up.
 
-## How it fits together
+## What's on the floor
 
-```
- Railway (runs 24/7)            Supabase (stores everything)        Vercel (the town)
- ┌────────────────────┐         ┌──────────────────────────┐        ┌──────────────────┐
- │ worker/            │ ──────▶ │ tasks, prospects, emails │ ◀────▶ │ dashboard/       │
- │  manager + 8 agents│ ◀────── │ approvals, reports, logs │  live  │ pixel town, inbox│
- │  approval executor │         │ screenshots (storage)    │        │ settings, pause  │
- └────────────────────┘         └──────────────────────────┘        └──────────────────┘
-```
-
-Your computer is not involved once it's set up. Close the laptop and the town keeps working.
-
-```
-agent-town/
-├── supabase/schema.sql      ← paste into Supabase once
-├── worker/                  ← deploy to Railway (has a Dockerfile)
-│   ├── src/agents/          ← one file per agent
-│   ├── src/executor.js      ← carries out what you approve
-│   └── .env.example         ← the variables Railway needs
-└── dashboard/               ← deploy to Vercel (plain static site, no build step)
-    └── config.js            ← your Supabase URL + anon key go here
-```
-
----
-
-## Setup (about 45 minutes)
-
-### 1. Supabase: the database
-
-1. Create a new project at supabase.com.
-2. Open **SQL Editor → New query**, paste all of `supabase/schema.sql`, and click **Run**.
-3. Create your login: **Authentication → Users → Add user → Create new user**. Use your email and a strong password, and tick **Auto Confirm User**.
-4. Lock the door: **Authentication → Sign In / Providers → Email**, turn **off** "Allow new users to sign up". Now only you can get in.
-5. Copy three values from **Project Settings → API** (or **API Keys**):
-   - Project URL
-   - `anon` / publishable key (safe to put in the dashboard)
-   - `service_role` / secret key (**secret**: only goes into Railway)
-
-### 2. Google Cloud: finding and checking businesses
-
-1. In console.cloud.google.com, create a project, then go to **APIs & Services → Library** and enable:
-   - **Places API (New)**
-   - **PageSpeed Insights API**
-2. **APIs & Services → Credentials → Create credentials → API key.** Click **Restrict key** and limit it to those two APIs.
-3. Billing must be on for Places. Set a budget alert under **Billing → Budgets** (for example $20) so there are no surprises.
-
-### 3. Anthropic: the brain
-
-1. Create an API key at console.anthropic.com.
-2. Under **Billing / Limits**, set a monthly spend limit (start around $50). The town also has its own daily cap, which you control from Town Hall.
-
-### 4. GitHub: where the code lives
-
-Create a new **private** repository and upload the whole `agent-town` folder (on github.com: **Add file → Upload files**, drag the folder in). Railway and Vercel deploy from this repo, and redeploy automatically whenever you change it.
-
-### 5. Railway: the worker that runs 24/7
-
-1. railway.com → **New Project → Deploy from GitHub repo** → pick your repo.
-2. Open the service → **Settings → Source → Root Directory** → set it to `worker`. Railway finds the Dockerfile automatically.
-3. **Variables** tab → add everything from `worker/.env.example`. At minimum:
-   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `BUSINESS_NAME`, `SENDER_NAME`, `BUSINESS_ADDRESS`.
-4. Deploy. In **Deployments → View logs** you should see `Agent Town worker starting...` and `Queued the first town meeting...`.
-
-The first start gives the town three jobs automatically: a town meeting, a scouting trip for 10 businesses, and a research report on local website pricing.
-
-To run the health check (it tests every connection and tells you what to fix), temporarily set the service's **Custom Start Command** to `npm run check`, deploy, read the logs, then clear it again.
-
-### 6. Vercel: the town
-
-1. In your GitHub repo, edit `dashboard/config.js` and paste in your Supabase **Project URL** and **anon/publishable key** (never the service_role key).
-2. vercel.com → **Add New → Project** → import the repo.
-3. Set **Root Directory** to `dashboard`, **Framework Preset** to **Other**, and leave the build command empty. Deploy.
-4. Open your Vercel URL, sign in with the user from step 1, and watch the town.
-
-Tip: add `?demo` to the URL any time to see the sample town.
-
----
-
-## When your outreach domain is ready
-
-Until then, approved emails wait (marked "in progress") and go out automatically once these are set.
-
-1. Buy a separate domain for outreach, close to your main brand (e.g. `getyourstudio.com` if your site is `yourstudio.com`). This protects your main domain's reputation.
-2. Add Google Workspace to it and create a mailbox, e.g. `you@getyourstudio.com`.
-3. In Workspace, set up **SPF, DKIM and DMARC** for the domain (Google's admin console walks you through each). Without them, your emails land in spam.
-4. Turn on 2-Step Verification for the mailbox, then create an **App Password** (Google Account → Security → App passwords).
-5. Add to Railway variables: `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_USER`, `SMTP_PASS` (the app password), and `SMTP_FROM` (like `Your Name <you@getyourstudio.com>`).
-6. **Warm up slowly.** Keep "Emails per day" at 10–15 for the first two to three weeks (Town Hall → Town rules), then raise it gradually.
-
-### Email rules this code follows (CAN-SPAM)
-
-- Every email ends with your name, business, real mailing address, and an unsubscribe line. That's why `BUSINESS_ADDRESS` is required. A PO box or virtual mailbox works.
-- Honest subject lines, no fake claims (the Postmaster's instructions forbid invented facts).
-- **Honor opt-outs.** When someone replies "unsubscribe," add their address to the do-not-contact list in the Post Office. The agents will never email them again.
-- No automated texts or calls anywhere in this system, on purpose (TCPA).
-
-This isn't legal advice. Read the FTC's CAN-SPAM compliance guide before your first send.
-
----
-
-## Using the town day to day
-
-- **Approvals** (top right): review drafted emails, posts, and listings. Edit anything, then Approve or Reject. Emails with no address found show the business phone, so you can add an address or call them yourself.
-- **Click any building** to see that agent's work and give it a job: send the scout after a business type, ask the Library a question, request a campaign, and so on.
-- **Town Hall** has the mayor's latest plan, a button to call a meeting now, the town rules (goal, daily budget, email limit, city, business types, your offer), and **Log a payment** to fill the earnings meter.
-- **Post Office**: when someone replies or becomes a client, mark it. The mayor uses this to steer.
-- **Pause all** stops every agent immediately. Resume when you're ready.
-
-## Costs to expect
-
-| Item | Rough cost |
+| Area | What you see |
 |---|---|
-| Claude API | Capped by your daily budget (default $5/day). A full scout → inspect → design → email cycle costs roughly $0.10–0.30 per prospect, mostly the design step |
-| Google Places | About $0.03 per search; Google gives a monthly free allowance |
-| Railway | ~$5–20/month |
-| Supabase, Vercel | Free tiers are plenty to start |
+| **Executive Office** (elevated glass office) | The **Big Boss Manager**, which is the existing Executive Orchestrator (agent `manager`), plus CEO agents once a brand earns a promotion. It has a briefing (now, since your last visit, money, blocked, needs approval, plan on record) and **Talk to the Big Boss**, which answers only from your records. The Big Boss can't approve, spend, or change permissions. |
+| **Desk clusters** | One per business: Agency, Sports, Etsy, Dropshipping, Real Estate, Brands/Social/Video, Ventures, Customers, Finance, Risk & Ops. Every agent has a desk with a status light, a status screen and a tag. |
+| **Five display walls** | Business performance, Sales activity, Commerce & fulfillment, Content operations, Attention required. Click a wall to expand it. Pipeline is always labeled as not revenue. |
+| **Ticker** | Recorded events only. Duplicates are collapsed and routine progress is hidden by default. Filter by business, priority or type. Click any item to open its record. |
 
-The AI spend meter on the dashboard shows today's spend. Prices for Claude models are set in `worker/src/config.js`; check anthropic.com/pricing and adjust if they differ.
+**Statuses** (always shown as icon + text + color): ▶ Working · ◷ Scheduled · ⇄ Waiting on another agent · ⧗ Waiting on a customer or provider · ! Needs approval · ✕ Blocked or failed · – Idle · Ⅱ Paused.
 
-## Adding to it later
+Each status comes from the database. An agent shows **Working** only while its task row is running. **Handoff lines** are drawn only from `handoff` rows the worker writes when a workflow changes owner. The headset animation appears only during a connected, consented AI call, never for a drafted script. In-depth: `dashboard/js/floor-model.js`.
 
-- **A new agent:** add a file in `worker/src/agents/` exporting `handlers`, register it in `agents/index.js`, add a row to the `agents` table, and add a building in `dashboard/town.js`.
-- **Auto-posting to social media:** connect a scheduler or platform API in `executor.js` under `social_post`. Right now approved posts appear in the Town Square with a Copy button.
-- **Etsy or Gumroad:** add a publisher next to the Shopify one in `executor.js`.
+**Click a desk** to see:
+- the assignment, its purpose, and who or what it involves
+- start time, latest update, completed and remaining steps
+- sources and outputs
+- task results and costs
+- dependencies, the next scheduled action, and the recommendation as recorded
+
+Controls on the desk: approve or edit, pause the agent, retry a failed task, reassign the workflow, open or pause the workflow.
+
+**View modes** (top of the floor): Live Floor (F) · Money (M) · Workflow (W) · Customer (C) · Content Studio (V) · Approvals (A) · System Health (H).
+
+**Command bar** (`/`): type things like "show blocked orders", "open today's calls", "pause dropship", or "what changed". Anything else goes to the Big Boss as a question. Commands use the same controls and approvals as the buttons.
+
+Other shortcuts: E = Executive Office, G = All Agents monitor, T = today's timeline, 1–0 = stations, P = pause all, Esc = back/close.
+
+You can also save camera views, lock the camera, and choose the display: 3D full, 3D simplified, or 2D cards (the default on phones). Sound alerts are off by default. `?demo` shows an isolated sample floor where nothing is real or sent.
+
+**Nothing irreversible happens without your approval.** Emails, offers, launches and posts wait in Approvals. Standing approvals (campaigns, fulfillment rules, content scope) let routine actions run inside the exact limits you approved. Editing anything after approval sends it back for re-approval.
+
+---
+
+## Setup
+
+### 1. Supabase (database)
+
+1. Create a project at supabase.com.
+2. In **SQL Editor → New query**, run these files **in order**, one query each. Each is safe to run again.
+   1. `supabase/schema.sql`
+   2. `supabase/002_command_center.sql` (approval safety, workflows, money, commerce). **Approved emails won't send until this has run.**
+   3. `supabase/003_dropship_realestate.sql`
+   4. `supabase/004_brands_media.sql`
+   5. `supabase/005_trading_floor.sql` (per-business pause, live floor)
+
+   The dashboard shows a red "Database update needed" banner naming any file you've missed.
+3. Create your login: **Authentication → Users → Add user**. Tick **Auto Confirm User**. Then turn off "Allow new users to sign up".
+4. From **Project Settings → API Keys**, copy:
+   - the Project URL
+   - the **publishable/anon** key (goes in the dashboard)
+   - the **secret/service_role** key (goes in Railway only)
+
+### 2. Railway (worker)
+
+1. **New Project → Deploy from GitHub repo** → `keckjones/agent-town`. The root `Dockerfile` and `railway.json` are picked up automatically, so leave Root Directory empty.
+2. **Settings → Networking → Generate Domain**. Webhooks and sign-in callbacks use this address.
+3. **Variables**: add what you have. Anything missing just shows as "needs setup" in Connections & Settings.
+
+| Variable | Needed for |
+|---|---|
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Required |
+| `ANTHROPIC_API_KEY` | Required (the agents' brain) |
+| `GOOGLE_API_KEY` | Finding and auditing businesses (Places API (New) + PageSpeed Insights) |
+| `BUSINESS_NAME`, `SENDER_NAME`, `BUSINESS_ADDRESS` | Required before any email (CAN-SPAM footer) |
+| `SMTP_PASS` | Sending email from agentickj@gmail.com (a Google **App Password**). `SMTP_USER`/`SMTP_HOST` default to Gmail. |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | The 7:30 AM text to you (A2P 10DLC registration required) |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Payment links + confirmed payments |
+| `ETSY_API_KEY`, `ETSY_SHARED_SECRET` | Etsy listings and orders |
+| `PRINTFUL_TOKEN` | Print-on-demand status |
+| `SHOPIFY_STORE`, `SHOPIFY_ADMIN_TOKEN`, `SHOPIFY_WEBHOOK_SECRET` | Dropshipping store |
+| `RENTCAST_API_KEY` | Real estate values and comps |
+| `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | Connecting brand YouTube channels |
+| `SPORTS_SUPABASE_URL`, `SPORTS_SUPABASE_ANON_KEY`, `SPORTS_EMAIL`, `SPORTS_PASSWORD`, `SPORTS_SITE_URL` | KJ's Picks official picks feed |
+| `BOOKING_URL`, `DASHBOARD_URL` | Links in emails and texts |
+| Optional | `CLAUDE_MODEL`, `CLAUDE_CHEAP_MODEL`, `MANAGER_CRON`, `CONCURRENCY`, `TASK_TIMEOUT_MIN` |
+
+**Never paste keys into chat or commit them to GitHub.** Secrets live only in Railway Variables. OAuth tokens are stored in a server-only database table that the dashboard can't read.
+
+### 3. Vercel (command center)
+
+1. Put your Supabase URL and **publishable** key in `dashboard/config.js` (never the secret key).
+2. Import the repo at vercel.com. Set **Root Directory** to `dashboard`, **Framework** to Other, and leave the build command empty.
+3. Open the URL and sign in. Three.js is bundled in `dashboard/vendor/`, so the 3D floor needs no outside CDN.
+
+---
+
+## Day to day
+
+- **Approvals**: approve, edit, request changes or reject. Approving locks in exactly what you saw.
+- **Pause**: "Pause all" (P) stops new work everywhere. Each business has its own **Pause this business** switch, and paused businesses' approved items wait rather than run. Each desk can pause one agent. Tasks already running finish.
+- **Retry**: from a failed desk, a task record, or System Health. It runs once, and emails, payments and posts stay duplicate-proof.
+- **Live means live**: the top bar shows realtime vs polling, time since the last successful update, and a stale warning after 3 minutes. The worker light turns red after 4 minutes without a heartbeat.
+- **Morning text**: set the time in Connections & Settings, then send a test. The text is marked active only after Twilio confirms delivery.
+
+## Rules the system follows
+
+- Outreach email: honest subject, one verified fact, your real address, an opt-out line. Opt-outs are permanent.
+- No automated texts or robocalls to prospects. AI-voice calls run only with written consent and a connected provider; otherwise you get a manual call task with a script.
+- Real estate: research-only until you record an attorney review. Offers are binding-offer approvals and are never signed for you. Earnest money is never sent, and wiring instructions are never changed.
+- Brands and content: no fake identities, bought engagement, or unlicensed media. QA blocks unsourced claims. Each item publishes once, to its fixed account.
+- Money: collected revenue counts only confirmed payments. Estimates and pipeline are always labeled.
+
+This isn't legal advice.
 
 ## Troubleshooting
 
 | You see | Fix |
 |---|---|
-| Grey dot next to "Agent Town" | The worker is offline. Check Railway logs. |
-| Login fails | Check the user exists and is confirmed in Supabase → Authentication → Users. |
-| Scout "Gave up … Google Places error 403" | Enable **Places API (New)** and check the key's restrictions. |
-| Agents say "Daily budget … reached" | Working as designed. Raise the daily budget in Town Hall, or wait until midnight. |
-| Emails stuck in "In progress" | Outreach email variables aren't set yet, or today's email limit was reached. |
-| Nothing moves in the town | Make sure `schema.sql` ran fully (it turns on live updates), then refresh. |
+| "Approved items are waiting: run supabase/002…" | Run the SQL files above in order, then re-approve once. Items approved before 002 ran come back to Approvals one time. |
+| Red "Database update needed" banner | Run the files it names, in order. |
+| Worker light red / "stale" | Check Railway → Deployments → logs. |
+| Emails wait with "mailbox not set up" | Add `SMTP_PASS` (Gmail App Password) in Railway. |
+| Agents say "Daily budget reached" | Working as designed. Raise the AI budget in Finance, or wait until midnight. |
+| 3D floor doesn't appear | The 2D cards are shown automatically. Choose "3D: simplified" on slower devices. |

@@ -19,7 +19,7 @@ import { recordMilestone } from './agents/realestate.js';
 import { shopifyReady } from './lib/shopify.js';
 import { youtubeConnectUrl } from './lib/youtube.js';
 import { askBoss } from './lib/boss.js';
-import { routeWork, onRequestTask } from './lib/collab.js';
+import { routeWork, onRequestTask, planIdea } from './lib/collab.js';
 import { gmailConnectUrl, refreshGmailState } from './lib/gmail.js';
 import { logEvent } from './lib/workflows.js';
 
@@ -30,6 +30,12 @@ let stopping = false;
 let wasPaused = null;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The task loop sleeps between checks; kick() wakes it immediately when new work arrives.
+let wakeLoop = null;
+const kick = () => { if (wakeLoop) { const w = wakeLoop; wakeLoop = null; w(); } };
+const nap = (ms) => new Promise((r) => { wakeLoop = r; setTimeout(() => { if (wakeLoop === r) wakeLoop = null; r(); }, ms); });
+// One run at a time per job, whether started by the schedule or the fast lane.
+const single = (fn) => { let p = null; return () => (p ||= Promise.resolve().then(fn).finally(() => { p = null; })); };
 const later = (minutes) => new Date(Date.now() + minutes * 60000).toISOString();
 
 async function runTask(task) {
@@ -93,14 +99,21 @@ async function loop() {
         const task = data?.[0];
         if (!task) break;
         running++;
-        runTask(task).finally(() => { running--; });
+        runTask(task).finally(() => { running--; kick(); });
+      }
+      // Express lane: one extra slot only for urgent work you asked for (priority 1-2), so it never waits behind background jobs.
+      if (running < CONCURRENCY + 1 && !expressMissing) {
+        const { data, error } = await db.rpc('claim_next_task_max', { max_priority: 2 });
+        if (error) { if (/function|does not exist|schema cache/i.test(error.message)) expressMissing = true; }
+        else if (data?.[0]) { running++; runTask(data[0]).finally(() => { running--; kick(); }); }
       }
     } catch (e) {
       console.error('Loop error:', e.message);
     }
-    await sleep(config.pollSeconds * 1000);
+    await nap(config.pollSeconds * 1000);
   }
 }
+let expressMissing = false;
 
 // Run a background job on a schedule, never overlapping itself, skipped while paused, errors logged not thrown.
 function every(expr, name, fn, { evenWhenPaused = false } = {}) {
@@ -164,9 +177,10 @@ async function reassignWorkflow(id, to) {
 
 async function processCommands() {
   const { data } = await db.from('commands').select('*').eq('status', 'queued').order('created_at').limit(10);
-  for (const c of data || []) {
+  // Each command runs on its own, so a slow one (an AI answer) never delays the others.
+  await Promise.all((data || []).map(async (c) => {
     const { data: claimed } = await db.from('commands').update({ status: 'running' }).eq('id', c.id).eq('status', 'queued').select();
-    if (!claimed?.length) continue;
+    if (!claimed?.length) return;
     let result, status = 'done';
     // One slow command (e.g. a connection check) must never hold up the others.
     const limit = new Promise((_, rej) => setTimeout(() => rej(new Error('Timed out after 90 seconds')), 90000));
@@ -183,13 +197,33 @@ async function processCommands() {
       else if (c.kind === 'retry_task') result = await retryTask(Number(c.input?.task_id));
       else if (c.kind === 'reassign_workflow') result = await reassignWorkflow(Number(c.input?.workflow_id), String(c.input?.to || ''));
       else if (c.kind === 'ask_boss') result = await askBoss(c.input?.question);
+      else if (c.kind === 'plan_idea') { result = await planIdea({ input: { project_id: Number(c.input?.project_id) } }); }
       else if (c.kind === 'gmail_connect') result = { url: await gmailConnectUrl() };
       else if (c.kind === 'youtube_connect') result = { url: await youtubeConnectUrl(Number(c.input.account_id)) };
       else throw new Error(`Unknown command ${c.kind}`);
       })()]);
     } catch (e) { status = 'failed'; result = { error: e.message }; }
     await db.from('commands').update({ status, result, finished_at: new Date().toISOString() }).eq('id', c.id);
-  }
+    kick();
+  }));
+}
+
+const commandsJob = single(processCommands);
+const approvalsJob = single(async () => { await runApprovals(); kick(); });
+const routeJob = single(async () => { await routeWork(); kick(); });
+/** Check cheaply every few seconds; run the job only when there's something waiting. */
+function fastLane(name, ms, job, hasWork, evenWhenPaused = false) {
+  let checking = false;
+  setInterval(async () => {
+    if (checking || stopping) return;
+    checking = true;
+    try {
+      if (await hasWork().catch(() => false)) {
+        if (evenWhenPaused || !(await getSettings().then((s) => s.paused).catch(() => true))) await job();
+      }
+    } catch (e) { console.error(`${name} (fast lane):`, e.message); }
+    finally { checking = false; }
+  }, ms);
 }
 
 async function main() {
@@ -216,9 +250,13 @@ async function main() {
   checkIntegrations().catch((e) => console.error('Integration check:', e.message));
 
   every(config.managerCron, 'manager', once('manager', 'plan', {}, 1));
-  every('* * * * *', 'approvals', runApprovals);
-  every('* * * * *', 'team requests', routeWork);
-  every('* * * * *', 'commands', processCommands, { evenWhenPaused: true });
+  every('* * * * *', 'approvals', approvalsJob);
+  every('* * * * *', 'team requests', routeJob);
+  every('* * * * *', 'commands', commandsJob, { evenWhenPaused: true });
+  // Fast lane: your clicks are picked up within ~2 seconds instead of waiting for the next minute.
+  fastLane('commands', 2000, commandsJob, async () => (await db.from('commands').select('id').eq('status', 'queued').limit(1)).data?.length, true);
+  fastLane('approvals', 3000, approvalsJob, async () => (await db.from('approvals').select('id').eq('status', 'approved').limit(1)).data?.length);
+  fastLane('team requests', 3000, routeJob, async () => (await db.from('work_requests').select('id').eq('status', 'open').limit(1)).data?.length);
   every('* * * * *', 'digest', digestTick, { evenWhenPaused: true });          // the digest has its own pause switch
   every('*/2 * * * *', 'sms status', refreshSmsStatuses, { evenWhenPaused: true });
   every('*/5 * * * *', 'inbox', once('support', 'process_inbox', {}, 2));

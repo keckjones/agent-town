@@ -114,7 +114,7 @@ export const config = {
   bookingUrl: clean(process.env.BOOKING_URL),
 
   managerCron: process.env.MANAGER_CRON || '0 */3 * * *', // every 3 hours
-  pollSeconds: Number(process.env.POLL_SECONDS || 10),
+  pollSeconds: Number(process.env.POLL_SECONDS || 3),
   timezone: process.env.TZ || 'America/Chicago',
 };
 

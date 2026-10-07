@@ -120,6 +120,7 @@ export function createLiveStore(sb) {
       const poll = setInterval(async () => {
         const { data } = await sb.from('commands').select('*').eq('id', row.id).maybeSingle();
         if (data) { const i = (tables.commands || []).findIndex((c) => c.id === data.id); if (i >= 0) tables.commands[i] = data; else (tables.commands ||= []).unshift(data); notify('commands'); }
+        if (data && ['done', 'failed'].includes(data.status)) for (const t of ['approvals', 'team_projects', 'work_requests', 'tasks']) reload(t);
         if (!data || ['done', 'failed'].includes(data.status) || Date.now() - t0 > 180000) clearInterval(poll);
       }, 3000);
       return row;

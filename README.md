@@ -77,6 +77,7 @@ You can also save camera views, lock the camera, and choose the display: 3D full
    5. `supabase/005_trading_floor.sql` (per-business pause, live floor)
    6. `supabase/006_plain_english.sql` (plain-English explanations on approval cards)
    7. `supabase/007_collaboration.sql` (agents working together: projects, team requests, hosted landing pages)
+   8. `supabase/008_fast_lane.sql` (express lane so your own requests never wait behind background jobs)
 
    The dashboard shows a red "Database update needed" banner naming any file you've missed.
 3. Create your login: **Authentication → Users → Add user**. Tick **Auto Confirm User**. Then turn off "Allow new users to sign up".

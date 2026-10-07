@@ -540,7 +540,7 @@ const ACTIONS = {
     if (a.type === 'retry_task') return ACTIONS.retry({ id: String(a.ref).split(':')[1] });
     if (a.type === 'pause_workflow') { if (await confirmBox('Pause this workflow?', esc(a.label || a.ref), 'Pause')) await ACTIONS['pause-wf']({ id: String(a.ref).split(':')[1] }); return; }
     if (a.type === 'pause_business') return ACTIONS['pause-business']({ id: a.business, to: 'paused' });
-    if (a.type === 'start_project') { const p = await S.insert('team_projects', { title: String(a.idea || '').slice(0, 80), idea: String(a.idea || ''), source: 'owner' }); await S.runTask('manager', 'plan_idea', { project_id: p.id }); if (!S.demo) toast('The Big Boss is planning it with the team. The plan comes to Approvals.'); go('team'); return; }
+    if (a.type === 'start_project') { const p = await S.insert('team_projects', { title: String(a.idea || '').slice(0, 80), idea: String(a.idea || ''), source: 'owner' }); await S.command('plan_idea', { project_id: p.id }); if (!S.demo) toast('The Big Boss is planning it now (usually 10–20 seconds).'); go('team'); return; }
   },
   async 'check-integrations'() { await S.command('check_integrations'); if (!S.demo) toast('Re-checking connections'); },
   async 'gmail-connect'() { await S.command('gmail_connect'); if (!S.demo) toast('Preparing a Google sign-in link…'); },
@@ -647,9 +647,10 @@ const FORMS = {
     const idea = val('idea-text', f);
     if (idea.length < 10) throw new Error('Describe the idea in a sentence or two.');
     const p = await S.insert('team_projects', { title: idea.slice(0, 80), idea, source: 'owner' });
-    await S.runTask('manager', 'plan_idea', { project_id: p.id });
+    await S.command('plan_idea', { project_id: p.id });
     f.reset();
-    if (!S.demo) toast('The Big Boss is planning it with the team. The plan will appear in Approvals for your OK (about a minute).');
+    if (!S.demo) toast('Got it. The Big Boss is planning it now (usually 10–20 seconds).');
+    go('team');
   },
   async 'ask-team'(f) {
     const need = val('team-need', f), title = val('team-title', f);
@@ -815,6 +816,7 @@ document.addEventListener('keydown', (e) => { if (e.target.closest?.('#panel')) 
 let panelDirty = false, panelDirtySince = 0;
 setInterval(() => { if (panelDirty && ui.station && (Date.now() - lastPanelInput > 2500 || Date.now() - panelDirtySince > 20000)) { panelDirty = false; renderPanel(); } }, 1000);
 // Time-on-task counters on desk tags tick every second without re-rendering.
+setInterval(() => { for (const el of document.querySelectorAll('.elapsed[data-since]')) el.textContent = `${Math.max(0, Math.round((Date.now() - new Date(el.dataset.since)) / 1000))}s`; }, 1000);
 setInterval(() => { for (const el of document.querySelectorAll('.label3d .tm[data-since]')) { const m = Math.max(0, Math.round((Date.now() - new Date(el.dataset.since)) / 1000)); el.textContent = m < 3600 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}` : `${Math.floor(m / 3600)}h ${Math.floor((m % 3600) / 60)}m`; } }, 1000);
 
 let pending = new Set(), rafId = null;

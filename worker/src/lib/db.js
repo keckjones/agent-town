@@ -78,8 +78,8 @@ export async function requestApproval({
     expires_at: expiresInHours ? new Date(Date.now() + expiresInHours * 3600e3).toISOString() : null,
   }).select().single());
   // A plain-English explanation for the owner (stored separately so a missing column never blocks the approval).
-  const { explainApproval } = await import('./explain.js');
-  await explainApproval(row);
+  // Written in the background so the card appears right away; the explanation fills in a few seconds later.
+  import('./explain.js').then(({ explainApproval }) => explainApproval(row)).catch(() => {});
   return row;
 }
 

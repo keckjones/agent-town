@@ -58,7 +58,8 @@ export async function routeWork() {
     if (r.need === 'brand_calendar' && !input.brand_id) { await db.from('work_requests').update({ status: 'blocked', result: { error: 'Needs an existing brand id.' }, updated_at: now() }).eq('id', r.id); continue; }
     const { data: claimed } = await db.from('work_requests').update({ status: 'queued', updated_at: now() }).eq('id', r.id).eq('status', 'open').select();
     if (!claimed?.length) continue;
-    const t = await enqueue(c.agent, c.kind, input, { createdBy: r.from_agent || 'manager', priority: 4 });
+    // Work for your own ideas/requests goes in the express lane.
+    const t = await enqueue(c.agent, c.kind, input, { createdBy: r.from_agent || 'manager', priority: r.project_id || r.from_agent === 'owner' ? 2 : 4 });
     await db.from('work_requests').update({ task_id: t.id, assigned_agent: c.agent }).eq('id', r.id);
     // A real handoff record: the floor draws a line and the requester walks the brief over.
     if (r.workflow_id && r.from_agent && r.from_agent !== c.agent) {
@@ -129,7 +130,8 @@ export async function planIdea(task) {
   const { data: project } = await db.from('team_projects').select('*').eq('id', task.input.project_id).single();
   if (!project) throw new Error('Project not found');
   await say('manager', `Planning your idea: ${project.idea.slice(0, 80)}`);
-  const plan = await askJSON({ agentId: 'manager', maxTokens: 2500, system: `${PLAIN_ENGLISH}\n${PLAN_SYSTEM(capabilityList())}`,
+  // Fast model: you're waiting for this. Planning is a short, structured job.
+  const plan = await askJSON({ agentId: 'manager', cheap: true, maxTokens: 1600, system: `${PLAIN_ENGLISH}\n${PLAN_SYSTEM(capabilityList())}`,
     prompt: `Owner's idea: ${project.idea}\nBusiness: KJ Agentic, College Station TX (local website agency, Etsy shop, dropshipping store, sports marketing for KJ's Picks, small social brands).` });
   const steps = (plan.steps || []).filter((s) => CAPABILITIES[s.need]).slice(0, 6);
   const dropped = (plan.steps || []).filter((s) => !CAPABILITIES[s.need]).map((s) => s.title);

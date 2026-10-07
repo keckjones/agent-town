@@ -134,6 +134,7 @@ export function workflowCard(S, wf) {
 export function gmailConnectBox(S) {
   const c = S.t('commands').find((x) => x.kind === 'gmail_connect');
   const link = c?.result?.url ? `<a class="btn sm primary" href="${esc(c.result.url)}" target="_blank" rel="noopener">Open Google sign-in →</a><span class="meta">Sign in as agentickj@gmail.com and allow “Send email”. The link works once, for 15 minutes.</span>`
+    : c && ['queued', 'running'].includes(c.status) && Date.now() - new Date(c.created_at) > 90000 ? `<span class="down meta">The worker hasn't picked this up after ${Math.round((Date.now() - new Date(c.created_at)) / 60000) || 1} min. Check the worker light at the top: if it's red, the worker is down (Railway → your service → Deployments → View logs, and send me the last red lines). If it's green, click Connect Gmail again.</span>`
     : c && ['queued', 'running'].includes(c.status) ? '<span class="meta">Preparing the sign-in link… (up to a minute)</span>'
     : c?.status === 'failed' ? `<span class="down meta">${esc(c.result?.error || 'Could not prepare the link')}</span>` : '';
   return `<div class="row"><button class="btn sm gold" data-act="gmail-connect">Connect Gmail</button>${link}</div>`;

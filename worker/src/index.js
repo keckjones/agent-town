@@ -162,7 +162,10 @@ async function processCommands() {
     const { data: claimed } = await db.from('commands').update({ status: 'running' }).eq('id', c.id).eq('status', 'queued').select();
     if (!claimed?.length) continue;
     let result, status = 'done';
+    // One slow command (e.g. a connection check) must never hold up the others.
+    const limit = new Promise((_, rej) => setTimeout(() => rej(new Error('Timed out after 90 seconds')), 90000));
     try {
+      await Promise.race([limit, (async () => {
       if (c.kind === 'send_test_text') result = await sendTestText();
       else if (c.kind === 'check_integrations') { await checkIntegrations(); result = { ok: true }; }
       else if (c.kind === 'run_task') {
@@ -177,6 +180,7 @@ async function processCommands() {
       else if (c.kind === 'gmail_connect') result = { url: await gmailConnectUrl() };
       else if (c.kind === 'youtube_connect') result = { url: await youtubeConnectUrl(Number(c.input.account_id)) };
       else throw new Error(`Unknown command ${c.kind}`);
+      })()]);
     } catch (e) { status = 'failed'; result = { error: e.message }; }
     await db.from('commands').update({ status, result, finished_at: new Date().toISOString() }).eq('id', c.id);
   }
@@ -194,6 +198,8 @@ async function main() {
 
   // Any task left "running" by a crash or redeploy goes back in the queue (external actions are duplicate-proof).
   await db.from('tasks').update({ status: 'queued' }).eq('status', 'running');
+  // Harmless dashboard requests interrupted by a restart are picked up again (nothing that sends is in this list).
+  await db.from('commands').update({ status: 'queued' }).eq('status', 'running').in('kind', ['gmail_connect', 'youtube_connect', 'check_integrations', 'ask_boss']);
   await db.from('agents').update({ status: 'idle', current_task: null }).neq('id', '_');
   await say('manager', 'Command center online.');
 

@@ -110,7 +110,17 @@ export function createLiveStore(sb) {
     async insert(table, row) { const d = must(await sb.from(table).insert(row).select()); reload(table); return d?.[0]; },
     async upsert(table, row, onConflict) { must(await sb.from(table).upsert(row, onConflict ? { onConflict } : undefined)); reload(table); },
     async remove(table, match) { let q = sb.from(table).delete(); for (const [k, v] of Object.entries(match)) q = q.eq(k, v); must(await q); reload(table); },
-    async command(kind, input = {}) { const row = must(await sb.from('commands').insert({ kind, input }).select())[0]; reload('commands'); return row; },
+    async command(kind, input = {}) {
+      const row = must(await sb.from('commands').insert({ kind, input }).select())[0]; reload('commands');
+      // Don't rely on live updates alone: check this command every 3 seconds until the worker finishes it (max 3 minutes).
+      const t0 = Date.now();
+      const poll = setInterval(async () => {
+        const { data } = await sb.from('commands').select('*').eq('id', row.id).maybeSingle();
+        if (data) { const i = (tables.commands || []).findIndex((c) => c.id === data.id); if (i >= 0) tables.commands[i] = data; else (tables.commands ||= []).unshift(data); notify('commands'); }
+        if (!data || ['done', 'failed'].includes(data.status) || Date.now() - t0 > 180000) clearInterval(poll);
+      }, 3000);
+      return row;
+    },
     async runTask(agent, kind, input = {}) { return this.command('run_task', { agent, kind, input }); },
     async fileUrl(path) { if (!path) return null; const { data } = await sb.storage.from('town-files').createSignedUrl(path, 3600); return data?.signedUrl || null; },
     async fileText(path) { const { data } = await sb.storage.from('town-files').download(path); return data ? data.text() : ''; },

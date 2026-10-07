@@ -48,6 +48,15 @@ export async function metricsForDay(ymd, tz) {
   const { data: snap } = await db.from('sports_snapshots').select('official_stats, fetched_at, stale').order('fetched_at', { ascending: false }).limit(1);
   const { count: posted } = await db.from('content_items').select('*', { count: 'exact', head: true })
     .eq('division', 'sports').eq('status', 'published').gte('published_at', from).lt('published_at', to);
+  const [dsOpen, dsExceptions, reDeadlines, reOffers, reContracts] = await Promise.all([
+    count('orders', (q) => q.eq('division', 'dropship').in('status', ['new', 'validated', 'fulfilling'])),
+    count('orders', (q) => q.eq('division', 'dropship').eq('status', 'exception')),
+    count('deadlines', (q) => q.eq('status', 'open').lte('due_at', new Date(Date.now() + 72 * 3600e3).toISOString())),
+    count('approvals', (q) => q.eq('status', 'pending').eq('kind', 're_offer')),
+    count('re_deals', (q) => q.in('stage', ['under_contract', 'due_diligence', 'marketing', 'buyer_selected', 'assignment_signed', 'closing'])),
+  ]);
+  const { data: dsLed } = await db.from('ledger').select('category, amount_usd, basis').eq('occurred_on', ymd).eq('division', 'dropship');
+  const dsRev = sum((dsLed || []).filter((r) => r.category === 'revenue' && r.basis === 'actual'));
   const { data: opp } = await db.from('opportunities').select('title, scores').eq('status', 'proposed').order('created_at', { ascending: false }).limit(5);
   const best = (opp || []).sort((a, b) => (b.scores?.total || 0) - (a.scores?.total || 0))[0];
 
@@ -58,6 +67,8 @@ export async function metricsForDay(ymd, tz) {
       meetings: outcome('meeting_booked'), signed: outcome('agreement_signed'), qualified: outcome('interested') + outcome('proposal_requested') },
     sports: snap?.[0] ? { record: snap[0].official_stats?.ALL?.record, units: snap[0].official_stats?.ALL?.units, stale: snap[0].stale, posted: posted || 0 } : null,
     bestOpportunity: best?.title || null,
+    dropship: { revenue: dsRev, open: dsOpen, exceptions: dsExceptions },
+    realestate: { deadlines72h: reDeadlines, offersAwaiting: reOffers, activeContracts: reContracts },
   };
 }
 
@@ -72,6 +83,8 @@ export function digestText(m, dashboardUrl) {
     m.calls.total ? `Calls: ${m.calls.connected} connected, ${m.calls.qualified} qualified, ${m.calls.meetings} meetings, ${m.calls.signed} signed` : null,
     `Etsy: ${m.etsyOrders} orders${m.etsyExceptions ? `, ${m.etsyExceptions} need attention` : ''}`,
     m.sports ? `Sports: official ${m.sports.record || 'n/a'}${m.sports.units != null ? ` (${m.sports.units > 0 ? '+' : ''}${m.sports.units}u)` : ''}, ${m.sports.posted} posts${m.sports.stale ? ', model data STALE' : ''}` : 'Sports: not connected',
+    m.dropship && (m.dropship.revenue || m.dropship.open || m.dropship.exceptions) ? `Dropship: ${money(m.dropship.revenue)} collected, ${m.dropship.open} open orders${m.dropship.exceptions ? `, ${m.dropship.exceptions} EXCEPTIONS` : ''}` : null,
+    m.realestate && (m.realestate.activeContracts || m.realestate.offersAwaiting || m.realestate.deadlines72h) ? `Real estate: ${m.realestate.activeContracts} under contract, ${m.realestate.offersAwaiting} offers need you${m.realestate.deadlines72h ? `, ${m.realestate.deadlines72h} DEADLINES within 72h` : ''}` : null,
     m.bestOpportunity ? `Top idea: ${m.bestOpportunity}` : null,
     `Needs you: ${m.approvals} approvals${m.blocked ? `, ${m.blocked} blocked` : ''}${m.failedTasks ? `, ${m.failedTasks} failed jobs` : ''}${m.intErrors ? `, ${m.intErrors} integration errors` : ''}`,
     dashboardUrl || null,

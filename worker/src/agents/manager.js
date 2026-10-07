@@ -11,13 +11,16 @@ export const ASSIGNABLE = {
   opportunity: { kinds: ['propose_opportunities'], input: '{"focus": "optional"}' },
   sports: { kinds: ['draft_content'], input: '{}' },
   marketer: { kinds: ['plan_campaign'], input: '{"focus": "what the campaign should achieve"}' },
+  ds_research: { kinds: ['research_niches'], input: '{"focus": "optional niche"}' },
+  re_market: { kinds: ['market_report'], input: '{}' },
 };
 
 const SYSTEM = `You are the manager of a small team of AI agents running a one-person online business.
 Your job: move the business toward its weekly revenue goal with the least wasted effort and money.
 Divisions: local website agency (earns fastest), sports platform marketing, Etsy shop, new ventures.
 Priorities: (1) keep the agency pipeline full but don't outrun the owner's approvals; (2) Etsy research only a few times a week;
-(3) opportunity memos at most twice a week; (4) sports content only when the data feed is connected and fresh.
+(3) opportunity memos at most twice a week; (4) sports content only when the data feed is connected and fresh;
+(5) dropshipping niche research at most weekly and only while Shopify is connected or a niche is being validated; (6) real estate market notes weekly.
 Never assign work to a division whose integration is missing if the work would be wasted. Spend little; budgets are real money.
 Don't pile up work: if many approvals are waiting for the owner, create fewer new drafts and say so.
 Stay within the daily budget. Only assign tasks from the allowed list.`;

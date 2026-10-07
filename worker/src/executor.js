@@ -10,6 +10,8 @@ import { createAuthorityFromApproval } from './lib/authority.js';
 import { createPaymentLink } from './lib/stripe.js';
 import { sendOutreach } from './agents/postmaster.js';
 import { publishProduct } from './agents/etsy.js';
+import { launchDropshipProduct } from './agents/dropship.js';
+import { executeRealEstate } from './agents/realestate.js';
 import { findWorkflow, advance, logEvent } from './lib/workflows.js';
 
 async function finish(id, status, result) {
@@ -107,6 +109,20 @@ const executors = {
   async social_post(a) { await finish(a.id, 'executed', { manual: true, note: 'Approved. Copy it from the dashboard and post it.' }); },
   async campaign(a) { await finish(a.id, 'executed', { note: 'Approved.' }); },
 
+  async ds_launch(a) {
+    const auth = await createAuthorityFromApproval(a);
+    const r = await launchDropshipProduct(a);
+    await finish(a.id, 'executed', { ...r, authority_id: auth.id, note: r.published ? 'Live. Matching orders inside the limits now fulfill automatically.' : 'Approved. Connect Shopify to publish.' });
+  },
+  async sample_purchase(a) {
+    await db.from('ds_products').update({ sample_status: 'requested', updated_at: new Date().toISOString() }).eq('id', a.payload.product_id);
+    await finish(a.id, 'executed', { manual: true, note: 'Place the sample order yourself, then mark it approved or rejected in Dropshipping when it arrives.' });
+  },
+  async re_letter(a) { await finish(a.id, 'executed', await executeRealEstate(a)); },
+  async re_offer(a) { await finish(a.id, 'executed', await executeRealEstate(a)); },
+  async re_deal_package(a) { await finish(a.id, 'executed', await executeRealEstate(a)); },
+  async budget_allocation(a) { await finish(a.id, 'executed', { note: 'Division budgets recorded. No money was moved.' }); },
+
   async opportunity_experiment(a) {
     const id = a.payload.opportunity_id;
     await db.from('opportunities').update({ status: 'approved_experiment', budget_usd: a.payload.budget_usd || 0, updated_at: new Date().toISOString() }).eq('id', id);
@@ -139,8 +155,7 @@ export async function runApprovals() {
     catch (e) {
       if (e.capped) { await db.from('approvals').update({ result: { waiting: e.message } }).eq('id', a.id); continue; }
       if (/not set up yet|not connected/i.test(e.message)) { await db.from('approvals').update({ result: { waiting: e.message } }).eq('id', a.id); continue; }
-      const status = e instanceof AlreadyAttempted ? 'failed' : 'failed';
-      await finish(a.id, status, { error: e.message });
+      await finish(a.id, 'failed', { error: e.message, duplicate_guard: e instanceof AlreadyAttempted });
       const wf = a.workflow_id ? { id: a.workflow_id } : null;
       await logEvent(wf?.id, a.agent_id, 'error', `Could not complete "${a.title}": ${e.message}`);
       await say(a.agent_id || 'manager', `Could not complete "${a.title}": ${e.message.slice(0, 160)}`, 'error');

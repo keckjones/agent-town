@@ -12,12 +12,15 @@ const STEPS = {
   etsy: '1) etsy.com/developers → Create a new app (personal use, for your own shop) → wait for approval. 2) Railway: ETSY_API_KEY (keystring) and ETSY_SHARED_SECRET. 3) In the app settings add callback URL <worker URL>/oauth/etsy/callback. 4) Click "Connect Etsy" in the Etsy station.',
   printful: 'printful.com → connect your Etsy store in Printful (Stores → Add store → Etsy) so Printful receives orders directly. Then Developers → create a private token with orders read access → Railway PRINTFUL_TOKEN.',
   sports: 'In KJ\'s Picks, create a dedicated member account for marketing (comped, read-only). Railway: SPORTS_SUPABASE_URL=https://wsogzlxricvjmpjshhjl.supabase.co, SPORTS_SUPABASE_ANON_KEY=<the sports site\'s public anon key>, SPORTS_EMAIL, SPORTS_PASSWORD.',
+  shopify: 'Shopify admin → Settings → Apps → Develop apps → create app with scopes read_orders, write_products, read_products, read_fulfillments → install → copy the Admin API token. Railway: SHOPIFY_STORE=yourstore.myshopify.com, SHOPIFY_ADMIN_TOKEN, SHOPIFY_WEBHOOK_SECRET (the app\'s API secret). Add webhooks orders/paid and refunds/create pointing to <worker URL>/webhooks/shopify.',
+  rentcast: 'rentcast.io → sign up → API dashboard → create key (free tier ~50 calls/month; paid plans for more) → Railway RENTCAST_API_KEY. Comparables are listing data, not closed sales (Texas is a non-disclosure state).',
   booking: 'Create a booking page that reads your real calendar (Google Calendar → Create → Appointment schedule, or Cal.com) → copy its public link → Railway BOOKING_URL.',
 };
 
-async function check(id, name, division, fn) {
+async function check(id, name, division, fn, stepsOverride = null) {
   try {
     const [status, detail, steps] = await fn();
+    if (stepsOverride && !steps) { await setIntegration(id, name, status, detail, stepsOverride, division); return; }
     await setIntegration(id, name, status, detail, steps || STEPS[id] || null, division);
   } catch (e) {
     await setIntegration(id, name, 'error', e.message.slice(0, 300), STEPS[id] || null, division);
@@ -84,6 +87,22 @@ export async function checkIntegrations() {
 
   await check('booking', 'Calendar booking link', 'agency', async () =>
     config.bookingUrl ? ['connected', `Agents offer ${config.bookingUrl}; the booking page reads your calendar`] : ['needs_setup', 'Agents can propose a call but cannot book times without a booking link']);
+
+  await check('shopify', 'Shopify (dropshipping store)', 'dropship', async () => {
+    if (!config.shopify.store || !config.shopify.token) return ['needs_setup', 'Store not connected; dropshipping stays in research mode'];
+    const r = await fetch(`https://${config.shopify.store}/admin/api/${process.env.SHOPIFY_API_VERSION || '2025-07'}/shop.json`, { headers: { 'X-Shopify-Access-Token': config.shopify.token }, signal: AbortSignal.timeout(15000) });
+    if (!r.ok) return ['error', `Shopify rejected the token (${r.status})`];
+    return process.env.SHOPIFY_WEBHOOK_SECRET ? ['connected', 'Products + verified order webhooks'] : ['unverified', 'Token works; add SHOPIFY_WEBHOOK_SECRET so orders arrive'];
+  });
+
+  await check('rentcast', 'Property data (RentCast)', 'realestate', async () =>
+    process.env.RENTCAST_API_KEY ? ['connected', 'Property records, valuations and listing comps'] : ['needs_setup', 'Underwriting runs on facts you provide only (low confidence)']);
+
+  await check('re_legal', 'Texas real estate legal review', 'realestate', async () => {
+    const { data } = await db.from('re_jurisdictions').select('status, attorney_review').eq('id', 'TX').maybeSingle();
+    if (!data) return ['needs_setup', 'Run 003_dropship_realestate.sql'];
+    return data.status === 'transactions_ok' ? ['connected', `Reviewed: ${JSON.stringify(data.attorney_review)}`] : ['needs_setup', `Status: ${data.status}. Offers and contracts stay blocked until a Texas real estate attorney reviews the templates.`];
+  }, 'Hire a Texas real estate attorney to review: (1) purchase agreement with assignment clause, (2) seller notice under Occ. Code §1101.0045 (required since 2024), (3) buyer notice, (4) assignment agreement, (5) your outreach letter. Then record the review and approved templates in Real Estate.');
 
   await check('ai_calling', 'AI phone calls', 'agency', async () => ['disabled',
     'Off by design. AI voices are "artificial voice" under the TCPA, and a listed business number is not consent. Calls become manual call tasks with a prepared script; AI calling would only ever apply to prospects who gave written consent, and needs a voice provider connected.',

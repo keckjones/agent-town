@@ -15,12 +15,18 @@ import { handlers as etsy, merchantHandlers } from './etsy.js';
 import { handlers as fulfillment } from './fulfillment.js';
 import { handlers as sports } from './sports.js';
 import { handlers as opportunity } from './opportunity.js';
+import { handlers as dropship } from './dropship.js';
+import { handlers as realestate } from './realestate.js';
+import { handlers as shared } from './shared.js';
 
 // agent id → { task kind → handler }
 export const registry = {
   manager, research, scout, inspector, designer, postmaster, marketer, social, qa, support, caller, finance,
   etsy, fulfillment, sports, opportunity,
   merchant: { ...merchantLegacy, ...merchantHandlers },
+  ds_research: dropship, ds_product: dropship, ds_supplier: dropship, ds_store: dropship, ds_orders: dropship,
+  re_market: realestate, re_leads: realestate, re_underwrite: realestate, re_deals: realestate, re_buyers: realestate,
+  experiments: shared, learning: shared, capital: shared, risk: shared, improve: shared,
 };
 
 // What each agent is doing, in plain words (shown in the live feed and the "why" panel).
@@ -48,4 +54,21 @@ export const verbs = {
   write_posts: 'Writing posts',
   send_test_text: 'Sending a test text',
   daily_rollup: 'Closing yesterday\'s books',
+  research_niches: 'Researching dropshipping niches',
+  evaluate_product: 'Scoring a product and its risks',
+  find_suppliers: 'Verifying suppliers',
+  build_listing: 'Building a product page',
+  review_order: 'Reviewing an order',
+  sync_shopify_orders: 'Checking tracking',
+  market_report: 'Reading the local real estate market',
+  import_leads: 'Importing property leads',
+  underwrite: 'Underwriting a property',
+  plan_outreach: 'Preparing seller outreach',
+  prepare_offer: 'Preparing an offer for approval',
+  match_buyers: 'Matching opt-in buyers',
+  check_risks: 'Checking risk thresholds',
+  allocation_report: 'Reviewing available cash',
+  weekly_learning: 'Learning from results',
+  design_experiment: 'Designing an experiment',
+  find_bottlenecks: 'Looking for bottlenecks',
 };

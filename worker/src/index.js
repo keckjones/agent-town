@@ -15,6 +15,8 @@ import { checkIntegrations } from './lib/integrations.js';
 import { digestTick, sendTestText, rollupAiCost } from './agents/finance.js';
 import { refreshSmsStatuses } from './lib/sms.js';
 import { sportsReady } from './config.js';
+import { recordMilestone } from './agents/realestate.js';
+import { shopifyReady } from './lib/shopify.js';
 
 const CONCURRENCY = Number(process.env.CONCURRENCY || 2);
 const MAX_ATTEMPTS = 3;
@@ -117,6 +119,9 @@ const RUNNABLE = {
   manager: ['plan'], scout: ['find_prospects'], research: ['research'], etsy: ['research_products'], opportunity: ['propose_opportunities'],
   sports: ['sync_picks', 'draft_content'], fulfillment: ['sync_orders'], support: ['process_inbox'], postmaster: ['run_followups', 'draft_email', 'draft_proposal'],
   designer: ['design_page'], caller: ['prepare_call', 'record_outcome'], marketer: ['plan_campaign'], merchant: ['build_digital_product'], qa: ['check_site'],
+  ds_research: ['research_niches'], ds_store: ['build_listing'], ds_orders: ['review_order', 'sync_shopify_orders'],
+  re_market: ['market_report'], re_leads: ['import_leads'], re_underwrite: ['underwrite'], re_deals: ['plan_outreach', 'prepare_offer'], re_buyers: ['match_buyers'],
+  risk: ['check_risks'], capital: ['allocation_report'], learning: ['weekly_learning'], experiments: ['design_experiment'], improve: ['find_bottlenecks'],
 };
 async function processCommands() {
   const { data } = await db.from('commands').select('*').eq('status', 'queued').order('created_at').limit(10);
@@ -132,7 +137,8 @@ async function processCommands() {
         if (!RUNNABLE[agent]?.includes(kind)) throw new Error(`Not allowed from the dashboard: ${agent}/${kind}`);
         const t = await enqueue(agent, kind, input || {}, { priority: 2, createdBy: 'owner' });
         result = { task_id: t.id };
-      } else throw new Error(`Unknown command ${c.kind}`);
+      } else if (c.kind === 're_milestone') result = await recordMilestone(c.input || {});
+      else throw new Error(`Unknown command ${c.kind}`);
     } catch (e) { status = 'failed'; result = { error: e.message }; }
     await db.from('commands').update({ status, result, finished_at: new Date().toISOString() }).eq('id', c.id);
   }
@@ -169,6 +175,11 @@ async function main() {
   every('12 * * * *', 'sports', async () => { if (sportsReady()) await once('sports', 'sync_picks', {}, 3)(); });
   every('*/30 * * * *', 'integrations', checkIntegrations, { evenWhenPaused: true });
   every('10 0 * * *', 'daily rollup', rollupAiCost, { evenWhenPaused: true });
+  every('20 * * * *', 'risk', once('risk', 'check_risks', {}, 1), { evenWhenPaused: false });
+  every('*/30 * * * *', 'shopify tracking', async () => { if (shopifyReady()) await once('ds_orders', 'sync_shopify_orders', {}, 3)(); });
+  every('0 6 * * 1', 'weekly learning', once('learning', 'weekly_learning', {}, 6));
+  every('15 6 * * 1', 'capital', once('capital', 'allocation_report', {}, 6));
+  every('30 6 * * 1', 'bottlenecks', once('improve', 'find_bottlenecks', {}, 7));
 
   // Keep the dashboard's "online" light green.
   setInterval(() => db.from('agents').update({ last_seen: new Date().toISOString() }).eq('id', 'manager').then(() => {}), 60000);

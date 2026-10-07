@@ -5,6 +5,8 @@ import { config } from './config.js';
 import { validTwilioSignature, applySmsStatus } from './lib/sms.js';
 import { handleStripeWebhook } from './lib/stripe.js';
 import { etsyAuthStart, etsyAuthCallback } from './lib/etsy.js';
+import { validShopifyWebhook, orderRevenue } from './lib/shopify.js';
+import { db, addLedger, enqueue } from './lib/db.js';
 
 function readBody(req, limit = 1e6) {
   return new Promise((resolve, reject) => {
@@ -43,6 +45,33 @@ export function startServer() {
         const raw = await readBody(req);
         const out = await handleStripeWebhook(raw, req.headers['stripe-signature']);
         return send(res, out.status, out.body);
+      }
+
+      if (req.method === 'POST' && url.pathname === '/webhooks/shopify') {
+        const raw = await readBody(req);
+        if (!validShopifyWebhook(raw, req.headers['x-shopify-hmac-sha256'])) return send(res, 401, 'bad signature');
+        const topic = req.headers['x-shopify-topic'];
+        const o = JSON.parse(raw.toString('utf-8'));
+        if (topic === 'orders/paid') {
+          const { revenue, tax } = orderRevenue(o);
+          const ext = `shopify:${o.id}`;
+          const { data: existing } = await db.from('orders').select('id').eq('external_id', ext).maybeSingle();
+          if (!existing) {
+            const { data: row } = await db.from('orders').insert({ division: 'dropship', platform: 'shopify', external_id: ext, amount_usd: revenue, status: 'new',
+              data: { line_items: (o.line_items || []).map((l) => ({ product_id: l.product_id, variant_id: l.variant_id, quantity: l.quantity, title: l.title, sku: l.sku })),
+                shipping_address: o.shipping_address && { address1: o.shipping_address.address1, city: o.shipping_address.city, province: o.shipping_address.province_code, zip: o.shipping_address.zip, country_code: o.shipping_address.country_code },
+                billing_address: o.billing_address && { country_code: o.billing_address.country_code }, financial_status: o.financial_status, tax_collected: tax, order_number: o.order_number } }).select().single();
+            await addLedger({ division: 'dropship', category: 'revenue', amountUsd: revenue, basis: 'actual', source: 'shopify order (excl. sales tax)', externalId: `shopify-rev:${o.id}` });
+            await addLedger({ division: 'dropship', category: 'fees', amountUsd: +(revenue * 0.029 + 0.3).toFixed(2), basis: 'estimated', source: 'card processing estimate', externalId: `shopify-fee:${o.id}` });
+            await enqueue('ds_orders', 'review_order', { order_id: row.id }, { createdBy: 'shopify', priority: 2 });
+          }
+        }
+        if (topic === 'refunds/create') {
+          const amt = (o.transactions || []).filter((t) => t.kind === 'refund' && t.status === 'success').reduce((s, t) => s + Number(t.amount), 0);
+          if (amt) await addLedger({ division: 'dropship', category: 'refund', amountUsd: amt, basis: 'actual', source: 'shopify refund', externalId: `shopify-refund:${o.id}` });
+          await db.from('orders').update({ status: 'refunded', updated_at: new Date().toISOString() }).eq('external_id', `shopify:${o.order_id}`);
+        }
+        return send(res, 200, 'ok');
       }
 
       if (req.method === 'GET' && url.pathname === '/oauth/etsy/start') {

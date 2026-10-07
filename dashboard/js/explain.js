@@ -50,6 +50,8 @@ export const AGENT_EXPLAIN = {
 
 export const TASK_EXPLAIN = {
   plan: 'Reviewing every business and deciding what each agent should do next.',
+  plan_idea: 'Turning your idea into a step-by-step plan, using only things the team can actually do, for your approval.',
+  build_site: 'Building a one-page website someone on the team asked for. It stays private until you approve publishing it.',
   research: 'Searching the web to answer a business question, keeping links to every source.',
   find_prospects: 'Searching Google Maps for local businesses of one type (for example, bakeries in Bryan) that might need a website.',
   audit_site: 'Loading the business\'s website on a phone and a computer to see what\'s broken: slow, hard to read, no call button. A weak site is a reason they might buy a new one.',
@@ -125,7 +127,9 @@ export const APPROVAL_EXPLAIN = {
   content_publish: 'Approving publishes this item to the brand account shown.',
   ceo_promotion: 'Approving gives this brand its own "CEO agent" that reports to the Big Boss. It gets no new spending power.',
   budget_allocation: 'Approving sets aside this money for the purpose shown.',
-  opportunity_experiment: 'Approving starts a small test of this new business idea, with a spending cap and a stop rule.',
+  opportunity_experiment: 'Approving starts a small test of this new business idea, with a spending cap and a stop rule. Anything the memo says other agents should make (a website, a brand, research) is requested automatically.',
+  project_plan: 'Approving lets the Big Boss hand each step of this plan to the agent who does that kind of work. Steps cost a little AI time. Anything public (a website going live, posts, emails) still comes back to you for approval.',
+  site_publish: 'Approving puts this page on the internet at the address shown. You can unpublish it later.',
 };
 
 export const GLOSSARY = {
@@ -163,6 +167,7 @@ export const GLOSSARY = {
   'idle': 'No task running right now. The agent waits for its next scheduled job or assignment.',
   'blocked': 'Can\'t continue until something is fixed (an error, a missing connection, a failed check).',
   'brand': 'A small online identity (name, look, audience) with its own social accounts.',
+  'landing page': 'A single web page about one offer, with one clear button (call, email or book).',
   'oauth': 'Signing in on Google\'s own page so we never see or store your password.',
 };
 

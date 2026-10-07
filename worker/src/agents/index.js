@@ -35,6 +35,8 @@ export const registry = {
 // What each agent is doing, in plain words (shown in the live feed and the "why" panel).
 export const verbs = {
   plan: 'Reviewing all divisions and assigning work',
+  plan_idea: 'Planning your idea with the team',
+  build_site: 'Building a landing page',
   research: 'Researching a market question with cited sources',
   find_prospects: 'Finding local businesses',
   audit_site: 'Verifying and auditing a business website',

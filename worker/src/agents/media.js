@@ -4,6 +4,7 @@
 //   → publishing (fixed brand + destination account, exactly once) → measurement → CEO promotion only after verified success.
 // Rules: no fake identities, bought followers, fake engagement, or unlicensed media. Account creation is always an owner task.
 import crypto from 'node:crypto';
+import { requestWork } from '../lib/collab.js';
 import { PLAIN_ENGLISH } from '../lib/explain.js';
 import { config } from '../config.js';
 import { db, must, say, enqueue, upload, download, requestApproval, addDocument } from '../lib/db.js';
@@ -464,7 +465,11 @@ export async function executeMedia(a) {
   if (a.kind === 'brand_experiment') {
     await db.from('brands').update({ status: 'experiment_approved', budget_usd: p.budget_usd || 0, updated_at: now() }).eq('id', p.brand_id);
     await enqueue('account_prov', 'prepare_accounts', { brand_id: p.brand_id, platforms: p.platforms }, { createdBy: 'owner', priority: 3 });
-    return { note: 'Experiment approved. Account checklists are being prepared; they need you to complete them.' };
+    // The brand needs a home page for its link-in-bio: ask Website Production.
+    const { data: br } = await db.from('brands').select('name, description, audience').eq('id', p.brand_id).single();
+    await requestWork({ fromAgent: 'brand_dev', need: 'landing_page', title: `${br?.name || 'Brand'} link-in-bio page`, division: 'media', workflowId: a.workflow_id,
+      brief: { brand_id: p.brand_id, audience: br?.audience, topic: br?.description, call_to_action: 'Follow / get in touch' }, dedupeKey: `brand:${p.brand_id}:landing_page` });
+    return { note: 'Experiment approved. Account checklists are being prepared (they need you), and Website Production is building the brand\'s link-in-bio page.' };
   }
   if (a.kind === 'content_publish') {
     const it = must(await db.from('content_items').select('*').eq('id', p.content_id).single());

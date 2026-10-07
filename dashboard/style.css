@@ -295,3 +295,5 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line-2); border-bottom-wid
 .label3d.desk .wk { font: 600 10.5px var(--mono); color: #ffcf8a; }
 .label3d.desk .wk:empty { display: none; }
 .label3d.desk.mini .wk { display: block; }
+.reqs { display: grid; gap: 6px; }
+.req { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; display: grid; gap: 4px; background: rgba(255,255,255,.015); }

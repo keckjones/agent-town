@@ -19,6 +19,7 @@ import { recordMilestone } from './agents/realestate.js';
 import { shopifyReady } from './lib/shopify.js';
 import { youtubeConnectUrl } from './lib/youtube.js';
 import { askBoss } from './lib/boss.js';
+import { routeWork, onRequestTask } from './lib/collab.js';
 import { gmailConnectUrl, refreshGmailState } from './lib/gmail.js';
 import { logEvent } from './lib/workflows.js';
 
@@ -40,6 +41,7 @@ async function runTask(task) {
   }
   const label = verbs[task.kind] || task.kind;
   await setAgent(task.agent_id, { status: 'working', current_task: label });
+  await onRequestTask(task, 'start').catch(() => {});
   try {
     const limitMin = Number(process.env.TASK_TIMEOUT_MIN || 12);
     const result = await Promise.race([
@@ -47,6 +49,7 @@ async function runTask(task) {
       new Promise((_, rej) => setTimeout(() => rej(new Error(`Timed out after ${limitMin} minutes`)), limitMin * 60000)),
     ]);
     await db.from('tasks').update({ status: 'done', result, finished_at: new Date().toISOString() }).eq('id', task.id);
+    await onRequestTask(task, 'done', result).catch((e) => console.error('request tracking:', e.message));
     const { data: a } = await db.from('agents').select('xp, tasks_done').eq('id', task.agent_id).single();
     await setAgent(task.agent_id, { status: 'idle', current_task: null, xp: (a?.xp || 0) + 10, tasks_done: (a?.tasks_done || 0) + 1 });
   } catch (err) {
@@ -65,6 +68,7 @@ async function runTask(task) {
       finished_at: retry ? null : new Date().toISOString(),
     }).eq('id', task.id);
     await setAgent(task.agent_id, { status: retry ? 'idle' : 'error', current_task: null });
+    if (!retry) await onRequestTask(task, 'failed', null, msg).catch(() => {});
     await say(task.agent_id, `${retry ? 'Hit a snag, will retry' : 'Gave up'} on ${label.toLowerCase()}: ${msg.slice(0, 160)}`, retry ? 'warn' : 'error');
   }
 }
@@ -122,7 +126,7 @@ const once = (agent, kind, input = {}, priority = 5) => async () => {
 
 // Requests from the dashboard (test text, refresh integrations, run a job now).
 const RUNNABLE = {
-  manager: ['plan'], scout: ['find_prospects'], research: ['research'], etsy: ['research_products'], opportunity: ['propose_opportunities'],
+  manager: ['plan', 'plan_idea'], scout: ['find_prospects'], research: ['research'], etsy: ['research_products'], opportunity: ['propose_opportunities'],
   sports: ['sync_picks', 'draft_content'], fulfillment: ['sync_orders'], support: ['process_inbox'], postmaster: ['run_followups', 'draft_email', 'draft_proposal'],
   designer: ['design_page'], caller: ['prepare_call', 'record_outcome'], marketer: ['plan_campaign'], merchant: ['build_digital_product'], qa: ['check_site'],
   ds_research: ['research_niches'], ds_store: ['build_listing'], ds_orders: ['review_order', 'sync_shopify_orders'],
@@ -213,6 +217,7 @@ async function main() {
 
   every(config.managerCron, 'manager', once('manager', 'plan', {}, 1));
   every('* * * * *', 'approvals', runApprovals);
+  every('* * * * *', 'team requests', routeWork);
   every('* * * * *', 'commands', processCommands, { evenWhenPaused: true });
   every('* * * * *', 'digest', digestTick, { evenWhenPaused: true });          // the digest has its own pause switch
   every('*/2 * * * *', 'sms status', refreshSmsStatuses, { evenWhenPaused: true });

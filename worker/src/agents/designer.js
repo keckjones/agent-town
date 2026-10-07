@@ -2,7 +2,9 @@
 import { db, must, say, enqueue, upload, download } from '../lib/db.js';
 import { ask } from '../lib/claude.js';
 import { screenshotHtml, PHONE, DESKTOP } from '../lib/browser.js';
-import { findWorkflow, advance } from '../lib/workflows.js';
+import { findWorkflow, advance, logEvent } from '../lib/workflows.js';
+import { requestApproval } from '../lib/db.js';
+import { config } from '../config.js';
 
 const SYSTEM = `You are a senior web designer building a one-page website mockup for a small local business.
 Output a single complete HTML document with all CSS inline in a <style> tag. No JavaScript.
@@ -82,4 +84,45 @@ export const handlers = {
     await enqueue('qa', 'check_site', { prospect_id: p.id, attempt: task.input.attempt || 1 }, { createdBy: 'designer', priority: 4 });
     return { prospect: p.name, comparison };
   },
+
+  /** A landing page another agent (or the Big Boss, for your idea) asked for. Built as a draft; goes live only after you approve. */
+  async build_site(task) {
+    const req = must(await db.from('work_requests').select('*').eq('id', task.input.work_request_id).single());
+    const b = req.brief || {};
+    let brand = null;
+    if (b.brand_id) brand = (await db.from('brands').select('*').eq('id', Number(b.brand_id)).maybeSingle()).data;
+    await say('designer', `Building a landing page: ${req.title}`);
+    const contact = config.bookingUrl ? `Booking link: ${config.bookingUrl}` : `Contact email: ${config.business.email}`;
+    const html = await ask({ agentId: 'designer', maxTokens: 6000, system: SITE_SYSTEM,
+      prompt: `Page purpose: ${req.title}
+Project: ${b.project_title || '-'} · Why: ${b.why || '-'}
+Audience: ${b.audience || '-'} · Offer: ${b.offer || '-'} · Call to action: ${b.call_to_action || 'Get in touch'}
+Topic/details: ${b.topic || b.goal || b.niche || '-'}
+${brand ? `Brand: ${brand.name}. Positioning: ${brand.description || ''}. Colors: ${JSON.stringify(brand.identity?.colors || {})}. Font: ${brand.identity?.font || ''}` : ''}
+Business: ${config.business.name || 'KJ Agentic'}, ${config.business.address || 'College Station, TX'}. ${contact}.
+Build the landing page now.` });
+    const clean = html.replace(/^```html?\s*|```\s*$/g, '').trim();
+    if (!/<html/i.test(clean)) throw new Error('The page draft came back incomplete; will retry.');
+    const slug = `${String(req.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)}-${req.id}`;
+    const htmlPath = await upload(`sites/${slug}/index.html`, clean, 'text/html');
+    const shot = await screenshotHtml(clean, PHONE, true).catch(() => null);
+    const previewPath = shot ? await upload(`sites/${slug}/preview.jpg`, shot, 'image/jpeg') : null;
+    const { data: site } = await db.from('sites').upsert({ slug, title: req.title, html_path: htmlPath, preview_path: previewPath, status: 'draft', request_id: req.id, project_id: req.project_id, brand_id: brand?.id || null, updated_at: new Date().toISOString() }, { onConflict: 'slug' }).select().single();
+    const url = `${config.publicUrl || ''}/p/${slug}`;
+    await requestApproval({ agentId: 'designer', kind: 'site_publish', division: req.division, workflowId: req.workflow_id, preview: previewPath,
+      title: `Publish landing page: ${req.title}`, reason: `Requested by ${req.from_agent}${b.project_title ? ` for "${b.project_title}"` : ''}.`,
+      expectedOutcome: `The page goes live at ${url}`, scope: 'One page. You can unpublish it any time.', reversible: true,
+      payload: { site_id: site.id, slug, url } });
+    await db.from('work_requests').update({ status: 'waiting_approval', output_ref: `site:${site.id}`, result: { site_id: site.id, url, note: 'Draft ready; waiting for you to approve publishing.' }, updated_at: new Date().toISOString() }).eq('id', req.id);
+    await logEvent(req.workflow_id, 'designer', 'result', `Landing page draft ready: ${req.title}`);
+    await say('designer', `Landing page draft ready for your approval: ${req.title}`, 'success');
+    return { site_id: site.id, slug };
+  },
 };
+
+const SITE_SYSTEM = `You build a single landing page for a small business idea. Output ONE complete HTML document, all CSS inline in a <style> tag, no JavaScript,
+no external images (CSS shapes/gradients and simple inline SVG only), at most one Google Font.
+Rules: mobile-first; one clear headline (exactly one <h1>); 2-4 short sections explaining the offer in plain words; one clear call to action.
+Use ONLY facts given. Never invent prices, reviews, testimonials, client logos, statistics, awards or guarantees. If a price wasn't given, say "Contact us for pricing".
+The call-to-action button links to the booking link or a mailto: link with the contact email given. No contact forms, no "#" links.
+Footer: business name and address as given. <html lang="en">, alt text on any <img>, body text at least 16px, buttons at least 44px tall.`;

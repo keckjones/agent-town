@@ -62,6 +62,8 @@ export function approvalCard(a, S) {
   if (p.memo) extra.push(`<details class="x"><summary>Investment memo</summary>${md(p.memo)}</details>`);
   if (p.deliverables) extra.push(`<div class="meta">Deliverables: ${esc(p.deliverables.join('; '))}</div>`);
   if (p.disclosure) extra.push(`<div class="note warn">${esc(p.disclosure)}</div>`);
+  if (p.plan_text) extra.push(`<div><div class="meta">The plan</div><div class="pre">${esc(p.plan_text)}</div></div>`);
+  if (p.url && a.kind === 'site_publish') extra.push(`<div class="meta">Will go live at: ${esc(p.url)}</div>`);
   const ev = Array.isArray(a.evidence) ? a.evidence : [];
   const res = a.result?.note || a.result?.waiting || a.result?.error;
   const agent = S.t('agents').find((x) => x.id === a.agent_id);

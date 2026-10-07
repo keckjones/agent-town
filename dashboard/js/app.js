@@ -83,7 +83,7 @@ function renderRail() {
     const badge = id === 'approvals' && need ? `<span class="badge">${need}</span>` : id === 'monitor' && blocked ? `<span class="badge red">${blocked}</span>`
       : s.division && paused.has(s.division) ? '<span class="chip warn">paused</span>' : w?.blocked ? `<span class="badge red">${w.blocked}</span>` : w?.working ? `<span class="wk">▶${w.working}</span>` : s.key ? `<span class="key">${s.key.toUpperCase()}</span>` : '';
     return `<button class="station-btn" data-act="goto" data-id="${id}" style="--accent:${s.accent}" aria-current="${ui.station === id}"><span class="glyph"></span><span>${esc(s.name)}</span>${badge}</button>`; }).join('')}`;
-  $('#rail').innerHTML = group('Command', ['overview', 'approvals', 'monitor', 'timeline']) + group('Businesses', ['agency', 'sports', 'etsy', 'dropship', 'realestate', 'media']) + group('Operations', ['ventures', 'customers', 'finance', 'hq', 'setup']);
+  $('#rail').innerHTML = group('Command', ['overview', 'team', 'approvals', 'monitor', 'timeline']) + group('Businesses', ['agency', 'sports', 'etsy', 'dropship', 'realestate', 'media']) + group('Operations', ['ventures', 'customers', 'finance', 'hq', 'setup']);
 }
 
 function renderTop() {
@@ -112,6 +112,8 @@ function migrationsNeeded() {
   if (S.missing.has('ds_products')) out.push('003_dropship_realestate.sql');
   if (S.missing.has('brands')) out.push('004_brands_media.sql');
   if (dv && !('paused_at' in dv)) out.push('005_trading_floor.sql');
+  if (ap && !('explain' in ap)) out.push('006_plain_english.sql');
+  if (S.missing.has('work_requests')) out.push('007_collaboration.sql');
   return out;
 }
 function renderMigrate() {
@@ -538,6 +540,7 @@ const ACTIONS = {
     if (a.type === 'retry_task') return ACTIONS.retry({ id: String(a.ref).split(':')[1] });
     if (a.type === 'pause_workflow') { if (await confirmBox('Pause this workflow?', esc(a.label || a.ref), 'Pause')) await ACTIONS['pause-wf']({ id: String(a.ref).split(':')[1] }); return; }
     if (a.type === 'pause_business') return ACTIONS['pause-business']({ id: a.business, to: 'paused' });
+    if (a.type === 'start_project') { const p = await S.insert('team_projects', { title: String(a.idea || '').slice(0, 80), idea: String(a.idea || ''), source: 'owner' }); await S.runTask('manager', 'plan_idea', { project_id: p.id }); if (!S.demo) toast('The Big Boss is planning it with the team. The plan comes to Approvals.'); go('team'); return; }
   },
   async 'check-integrations'() { await S.command('check_integrations'); if (!S.demo) toast('Re-checking connections'); },
   async 'gmail-connect'() { await S.command('gmail_connect'); if (!S.demo) toast('Preparing a Google sign-in link…'); },
@@ -640,6 +643,20 @@ const MODALS = {
 
 const FORMS = {
   async 'ask-boss'(f) { const q = val('boss-q', f); await askBoss(q); f.reset(); },
+  async 'give-idea'(f) {
+    const idea = val('idea-text', f);
+    if (idea.length < 10) throw new Error('Describe the idea in a sentence or two.');
+    const p = await S.insert('team_projects', { title: idea.slice(0, 80), idea, source: 'owner' });
+    await S.runTask('manager', 'plan_idea', { project_id: p.id });
+    f.reset();
+    if (!S.demo) toast('The Big Boss is planning it with the team. The plan will appear in Approvals for your OK (about a minute).');
+  },
+  async 'ask-team'(f) {
+    const need = val('team-need', f), title = val('team-title', f);
+    if (!title) throw new Error('Say what you need.');
+    await S.insert('work_requests', { from_agent: 'owner', need, title, brief: { topic: title, goal: title, question: title, focus: title, category: title, idea: title }, status: 'open', dedupe_key: `owner:${need}:${Date.now()}` });
+    f.reset(); if (!S.demo) toast('Sent to the team. It starts within a minute.');
+  },
   async 'agency-settings'(f) {
     let pricing; try { pricing = JSON.parse(val('f-pricing', f)); } catch { throw new Error('Pricing must be valid JSON.'); }
     await S.update('settings', { id: 1 }, { outreach_areas: val('f-areas', f).split(',').map((x) => x.trim()).filter(Boolean), outreach_categories: val('f-cats', f).split(',').map((x) => x.trim()).filter(Boolean),

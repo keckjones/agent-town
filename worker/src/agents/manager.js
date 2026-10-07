@@ -1,5 +1,6 @@
 // Mayor Mae: looks at the whole town, decides what everyone should do next, and queues the work.
 import { db, say, enqueue, getSettings, addDocument, startOfToday } from '../lib/db.js';
+import { requestWork, planIdea, capabilityList, CAPABILITIES } from '../lib/collab.js';
 import { PLAIN_ENGLISH } from '../lib/explain.js';
 import { askJSON, spentToday } from '../lib/claude.js';
 import { emailReady } from '../config.js';
@@ -69,6 +70,9 @@ async function snapshot() {
 }
 
 export const handlers = {
+  // You give the Big Boss an idea; it plans the steps with the team and asks you to approve the plan.
+  plan_idea: planIdea,
+
   async plan(task) {
     await say('manager', 'Calling a town meeting to review progress...');
     const state = await snapshot();
@@ -82,7 +86,11 @@ Allowed task types:\n${allowed}
 
 Decide the next batch of work (at most 8 tasks). Return JSON:
 {"summary": "2-4 sentence status update for the owner", "focus_today": "one line", "owner_actions": ["things only the owner can do, e.g. approve emails"],
-"tasks": [{"agent": "...", "kind": "...", "input": {...}, "priority": 1-9, "reason": "..."}]}`,
+"tasks": [{"agent": "...", "kind": "...", "input": {...}, "priority": 1-9, "reason": "..."}],
+"requests": [{"need": "...", "title": "...", "brief": {...}, "why": "..."}] (optional, at most 2: when one part of the business needs something another team makes)}
+
+Team capabilities you can request (agents fulfil them; anything public still needs the owner's approval):
+${capabilityList()}`,
     });
 
     let queued = 0;
@@ -93,9 +101,17 @@ Decide the next batch of work (at most 8 tasks). Return JSON:
       queued++;
     }
 
+    let requested = 0;
+    for (const r of (plan.requests || []).slice(0, 2)) {
+      if (!CAPABILITIES[r.need]) continue;
+      await requestWork({ fromAgent: 'manager', need: r.need, title: r.title || r.need, brief: { ...(r.brief || {}), why: r.why } });
+      requested++;
+    }
+
     const md = [`**Focus:** ${plan.focus_today}`, '', plan.summary, '',
       '**Needs you:**', ...(plan.owner_actions || []).map((a) => `- ${a}`), '',
-      '**Assigned:**', ...(plan.tasks || []).map((t) => `- ${t.agent}: ${t.kind}, ${t.reason}`)].join('\n');
+      '**Assigned:**', ...(plan.tasks || []).map((t) => `- ${t.agent}: ${t.kind}, ${t.reason}`),
+      ...(requested ? ['', '**Asked the team for:**', ...(plan.requests || []).slice(0, 2).map((r) => `- ${r.title} (${r.need})`)] : [])].join('\n');
     await addDocument('manager', 'manager_plan', `Town meeting: ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`, md, { state, plan });
     await say('manager', `${plan.focus_today} (${queued} tasks assigned)`, 'success');
     return { queued, summary: plan.summary };

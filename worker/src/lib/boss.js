@@ -5,7 +5,7 @@ import { db, startOfToday } from './db.js';
 import { askJSON } from './claude.js';
 
 // Actions the Big Boss may propose. The dashboard maps each to an existing control; the worker re-validates run_task.
-export const PROPOSABLE = ['run_task', 'open', 'pause_workflow', 'pause_business', 'retry_task'];
+export const PROPOSABLE = ['run_task', 'open', 'pause_workflow', 'pause_business', 'retry_task', 'start_project'];
 
 const ago = (iso) => (iso ? `${Math.round((Date.now() - new Date(iso)) / 60000)} min ago` : null);
 
@@ -66,6 +66,7 @@ Allowed proposed actions (max 3):
   {"type":"retry_task","ref":"task:7","label":"..."}
   {"type":"pause_workflow","ref":"workflow:3","label":"..."}
   {"type":"pause_business","business":"<division id>","label":"..."}
+  {"type":"start_project","idea":"the owner's idea, restated clearly","label":"Plan this with the team"}  (when the owner describes something they want done; you will then plan it with the team for their approval)
 Return JSON: {"answer": "...", "refs": ["approval:12", ...], "actions": [...]}`;
 
 export async function askBoss(question) {

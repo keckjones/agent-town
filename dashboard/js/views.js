@@ -200,8 +200,62 @@ export function recordPanel(S, ui, ctx) {
   if (type === 'deadline') { const d = find('deadlines'); return back + (d ? `<div class="card"><h4>${esc(d.kind.replace(/_/g, ' '))}</h4><div>Due ${ct(d.due_at)} (${ago(d.due_at)})</div>${d.subject_type === 're_deal' ? refBtn(`deal:${d.subject_id}`, `Open deal #${d.subject_id}`, 'btn sm') : ''}</div>` : missing); }
   if (type === 'brand') { const b = find('brands'); return back + (b ? brandCard(S, b) : missing); }
   if (type === 'product') { const p = find('ds_products') || find('products'); return back + (p ? `<div class="card"><h4>${esc(p.title)}</h4><div class="meta">${esc(p.stage || '')}</div><div class="pre">${esc(JSON.stringify(p.economics || {}, null, 2))}</div></div>` : missing); }
+  if (type === 'request') { const r = find('work_requests'); if (!r) return back + missing; const t = S.t('tasks').find((x) => x.id === r.task_id);
+    return back + requestRow(S, r) + `<div class="card"><dl class="facts"><dt>Brief</dt><dd><div class="pre">${esc(JSON.stringify(r.brief || {}, null, 2))}</div></dd>${t ? `<dt>Task</dt><dd>${refBtn(`task:${t.id}`, `#${t.id} (${t.status})`)}</dd>` : ''}${r.project_id ? `<dt>Project</dt><dd><button class="lnk" data-act="goto" data-id="team">Open projects</button></dd>` : ''}${r.workflow_id ? `<dt>History</dt><dd>${refBtn(`workflow:${r.workflow_id}`, 'Workflow')}</dd>` : ''}</dl></div>`; }
   if (type === 'opportunity') { const o = find('opportunities'); return back + (o ? `<div class="card"><h4>${esc(o.title)}</h4>${md(o.memo || '')}</div>` : missing); }
   return back + missing;
+}
+
+// ------------------------------------------------------------------ teamwork: projects (your ideas) and agent-to-agent requests
+export const NEED_LABEL = {
+  landing_page: ['A landing page / website', 'designer'], social_brand: ['A social media brand', 'brand_dev'], social_content: ['Social media posts', 'social'],
+  brand_calendar: ['A content calendar for a brand', 'strategy'], marketing_campaign: ['A marketing campaign plan', 'marketer'], research: ['Market research', 'research'],
+  etsy_product: ['Etsy product ideas', 'etsy'], store_product: ['Products for the online store', 'ds_research'], local_leads: ['Local businesses to contact', 'scout'],
+  experiment_design: ['A small test with a goal and stop rule', 'experiments'],
+};
+const reqStatus = { open: ['Waiting to start', 'warn'], queued: ['Queued', 'ops'], in_progress: ['In progress', 'ops'], waiting_approval: ['Needs your approval', 'warn'], done: ['Done', 'ok'], blocked: ['Stopped', 'bad'], rejected: ['Rejected', ''] };
+function requestOutput(S, r) {
+  const res = r.result || {};
+  const site = r.output_ref?.startsWith('site:') ? S.t('sites').find((x) => `site:${x.id}` === r.output_ref) : null;
+  if (site) return site.status === 'published' && res.url ? `<a href="${esc(res.url)}" target="_blank" rel="noopener">Live page ↗</a>` : site.status === 'published' ? 'Live' : '<button class="lnk" data-act="goto" data-id="approvals">Draft ready: approve it to publish →</button>';
+  if (r.output_ref?.startsWith('document:')) return refBtn(r.output_ref, 'Open report');
+  if (res.error) return `<span class="down">${esc(res.error)}</span>`;
+  if (res.waiting) return `<span class="gold">${esc(res.waiting)}</span>`;
+  return res.summary ? `<span class="meta">${esc(String(res.summary).slice(0, 120))}</span>` : '';
+}
+export function requestRow(S, r) {
+  const [label] = NEED_LABEL[r.need] || [r.need];
+  const st = reqStatus[r.status] || [r.status, ''];
+  return `<div class="req"><div class="row between"><span>${refBtn(`request:${r.id}`, r.title)}</span>${chip(st[0], st[1])}</div>
+    <div class="meta">${esc(r.from_agent === 'owner' ? 'You' : agentName(S, r.from_agent))} → ${r.assigned_agent ? refBtn(`agent:${r.assigned_agent}`, agentName(S, r.assigned_agent)) : 'nobody can do this yet'} · ${esc(label)} · ${ago(r.created_at)}${r.depends_on ? ` · after request #${r.depends_on}` : ''}</div>
+    <div>${requestOutput(S, r)}</div></div>`;
+}
+export function ideaForm() {
+  return `<form data-form="give-idea" class="ask"><textarea class="i" id="idea-text" required placeholder="Tell the Big Boss what you want to happen. e.g. “Get catering orders for a taco truck in Bryan: a page people can book from and a few posts to announce it.”" style="min-height:76px"></textarea>
+    <div class="row"><button class="btn gold">Give the Big Boss this idea</button><span class="meta">He plans it with the team using only what they can actually do, and shows you the plan first. Nothing public happens without your OK.</span></div></form>`;
+}
+export function teamPanel(S, ui, ctx) {
+  const projects = S.t('team_projects');
+  const reqs = S.t('work_requests');
+  const loose = reqs.filter((r) => !r.project_id);
+  return [
+    `<div class="plain">This is how the agents work together. When one agent (or you) needs something another agent makes, like a website, a brand, posts or research, it sends a <b>request</b>. The request goes to the one agent who does that work, and you can follow it here. Public results (a page going live, posts, emails) still wait for your approval.</div>`,
+    section('Give the Big Boss an idea', ideaForm()),
+    section('Ask the team directly', `<form data-form="ask-team" class="row"><select class="i" id="team-need" style="flex:0 1 260px">${Object.entries(NEED_LABEL).map(([k, [l, ag]]) => `<option value="${k}">${esc(l)} (${esc(agentName(S, ag))})</option>`).join('')}</select>
+      <input class="i" id="team-title" placeholder="What exactly? e.g. a page for our $299 website offer" style="flex:1 1 240px"><button class="btn primary">Send</button></form>`),
+    section(`Projects (${projects.length})`, projects.length ? projects.map((p) => {
+      const steps = reqs.filter((r) => r.project_id === p.id).sort((a, b) => a.id - b.id);
+      return `<div class="card ${p.status === 'waiting_approval' ? 'prio' : ''}"><div class="row between"><b>${esc(p.title)}</b>${chip({ planning: 'Planning', waiting_approval: 'Plan needs your OK', active: 'In progress', done: 'Done', cancelled: 'Cancelled' }[p.status] || p.status, p.status === 'done' ? 'ok' : p.status === 'waiting_approval' ? 'warn' : 'ops')}</div>
+        <div class="meta">Your idea: “${esc(p.idea.slice(0, 220))}” · ${ago(p.created_at)}</div>
+        ${p.plan?.plain_english ? `<div class="plain">${esc(p.plan.plain_english)}</div>` : p.status === 'planning' ? '<div class="muted">The Big Boss is planning this… (about a minute)</div>' : ''}
+        ${p.status === 'waiting_approval' && p.approval_id ? refBtn(`approval:${p.approval_id}`, 'Review and approve the plan →', 'btn sm gold') : ''}
+        ${steps.length ? `<div class="reqs">${steps.map((r) => requestRow(S, r)).join('')}</div>` : ''}
+        ${(p.plan?.owner_tasks || []).length ? `<div class="note warn"><b>Only you can do:</b> ${esc(p.plan.owner_tasks.join('; '))}</div>` : ''}
+        ${p.workflow_id ? refBtn(`workflow:${p.workflow_id}`, 'Full history', 'btn sm ghost') : ''}</div>`;
+    }).join('') : '<p class="muted">No projects yet. Give the Big Boss an idea above.</p>'),
+    section(`Other team requests (${loose.length})`, loose.length ? `<div class="reqs">${loose.slice(0, 30).map((r) => requestRow(S, r)).join('')}</div>` : '<p class="muted">None yet. Agents create these when they need something from each other (for example, a new brand asks for its link-in-bio page).</p>'),
+    section('Pages the team has built', S.t('sites').length ? S.t('sites').map((x) => `<div class="req"><div class="row between"><b>${esc(x.title)}</b>${chip(x.status, x.status === 'published' ? 'ok' : 'warn')}</div>${x.preview_path ? `<img class="thumb" style="max-width:220px" data-path="${esc(x.preview_path)}" alt="Preview of ${esc(x.title)}">` : ''}</div>`).join('') : '<p class="muted">None yet.</p>'),
+  ].join('');
 }
 
 // ------------------------------------------------------------------ Executive Office: Big Boss briefing + Talk to the Big Boss
@@ -216,6 +270,7 @@ export function execPanel(S, ui, ctx) {
       ${boss ? `<div class="meta">${esc(boss.task || boss.why[0] || '')}</div>` : ''}
       <div class="row"><button class="btn sm" data-act="desk" data-id="manager">Inspect the Big Boss</button><button class="btn sm" data-act="goto" data-id="monitor">All Agents monitor</button><button class="btn sm" data-act="goto" data-id="timeline">Today's timeline</button>
       <button class="btn sm" data-act="run" data-agent="manager" data-kind="plan" data-input="{}">Review all divisions now</button></div></div>`,
+    section('Give the Big Boss an idea', ideaForm() + (() => { const act = S.t('team_projects').filter((p) => p.status !== 'done' && p.status !== 'cancelled'); return act.length ? `<div class="meta">${act.length} project(s) in progress. <button class="lnk" data-act="goto" data-id="team">See projects & team requests →</button></div>` : ''; })()),
     section('Talk to the Big Boss', `<form data-form="ask-boss" class="ask"><textarea class="i" id="boss-q" placeholder="e.g. What's blocking revenue this week? What needs me first?" required style="min-height:64px"></textarea><div class="row"><button class="btn primary">Ask</button><span class="meta">${S.demo ? 'Demo: answered from sample data in your browser.' : 'Answers come only from your records (small AI cost). Suggested actions run through the normal approvals.'}</span></div></form>
       ${asks.map((c) => `<div class="card"><div class="meta">You asked ${ago(c.created_at)}: “${esc(c.input?.question || '')}”</div>
         ${c.status === 'queued' || c.status === 'running' ? '<div class="muted">Thinking… (the worker picks this up within a minute)</div>' : c.status === 'failed' ? `<div class="down">${esc(c.result?.error || 'Failed')}</div>`
@@ -416,4 +471,5 @@ export const VIEWS = {
   'mode-customer': { name: () => 'Customer View', accent: '#7db7ff', render: customerPanel },
   'mode-health': { name: () => 'System Health', accent: '#8592a5', render: healthPanel },
   media: { name: () => 'Content Studio', accent: '#ff8bd1', render: contentPanel },
+  team: { name: () => 'Projects & Team Requests', accent: '#f2c14e', render: teamPanel },
 };

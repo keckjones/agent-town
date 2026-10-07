@@ -50,6 +50,9 @@ const TABLES = {
   brand_accounts: { order: ['id'] },
   brand_metrics: { order: ['observed_on', false], limit: 500 },
   commands: { order: ['created_at', false], limit: 50 },
+  team_projects: { order: ['created_at', false], limit: 50 },
+  work_requests: { order: ['created_at', false], limit: 200 },
+  sites: { order: ['created_at', false], limit: 100 },
 };
 
 export function createLiveStore(sb) {

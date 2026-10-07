@@ -7,7 +7,7 @@ import { validTwilioSignature, applySmsStatus } from './lib/sms.js';
 import { handleStripeWebhook } from './lib/stripe.js';
 import { etsyAuthStart, etsyAuthCallback } from './lib/etsy.js';
 import { validShopifyWebhook, orderRevenue } from './lib/shopify.js';
-import { db, addLedger, enqueue } from './lib/db.js';
+import { db, addLedger, enqueue, download } from './lib/db.js';
 import { youtubeCallback } from './lib/youtube.js';
 
 function readBody(req, limit = 1e6) {
@@ -33,6 +33,14 @@ export function startServer() {
     const url = new URL(req.url, 'http://local');
     try {
       if (req.method === 'GET' && url.pathname === '/health') return send(res, 200, 'ok');
+      // Landing pages the team built and you approved: <worker>/p/<slug>
+      if (req.method === 'GET' && url.pathname.startsWith('/p/')) {
+        const slug = decodeURIComponent(url.pathname.slice(3)).replace(/\/$/, '');
+        const { data: site } = await db.from('sites').select('html_path, status').eq('slug', slug).maybeSingle();
+        if (!site || site.status !== 'published') return send(res, 404, page('Not found', 'This page is not published.'), 'text/html');
+        const html = await download(site.html_path);
+        return send(res, 200, html.toString('utf-8'), 'text/html');
+      }
       // Public About + Privacy pages (Google's sign-in screen links to these).
       if (req.method === 'GET' && ['/', '/about', '/about.html', '/privacy', '/privacy.html'].includes(url.pathname)) {
         const file = url.pathname.startsWith('/privacy') ? 'privacy.html' : 'about.html';

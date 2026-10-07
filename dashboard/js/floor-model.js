@@ -180,6 +180,10 @@ export function deskStates(S, now = Date.now()) {
       since = myApprovals[0]?.created_at || calls[0]?.created_at || ownerBlock?.updated_at;
       why.push(needsYou);
     } else {
+      // Waiting on another agent: it asked a teammate for something (a website, a brand, research...) that isn't finished.
+      for (const r of S.t('work_requests').filter((x) => x.from_agent === a.id && ['queued', 'in_progress'].includes(x.status) && x.assigned_agent && x.assigned_agent !== a.id)) {
+        waitingOn.push({ agent: r.assigned_agent, reason: `${r.title} (${r.status === 'queued' ? 'queued' : 'in progress'})`, workflow: r.workflow_id, task: r.task_id, request: r.id });
+      }
       // Waiting on another agent: a workflow this agent owns has open work queued/running for a different agent.
       for (const w of owned) {
         const other = tasks.find((t) => t.agent_id !== a.id && ['queued', 'running'].includes(t.status) && subjectMatches(t, w));
@@ -189,8 +193,9 @@ export function deskStates(S, now = Date.now()) {
       const shipping = ['ds_orders', 'fulfillment'].includes(a.id) ? S.t('orders').filter((o) => o.status === 'fulfilling' && (a.id === 'ds_orders' ? o.division === 'dropship' : o.division === 'etsy')) : [];
       if (waitingOn.length) {
         status = 'waiting_agent'; const w0 = waitingOn[0];
-        task = wfs.find((w) => w.id === w0.workflow)?.objective; since = wfs.find((w) => w.id === w0.workflow)?.updated_at;
-        why.push(`Waiting on ${w0.agent}: ${w0.reason}`); refs.push(`workflow:${w0.workflow}`, `task:${w0.task}`);
+        task = wfs.find((w) => w.id === w0.workflow)?.objective || (w0.request ? `Asked ${S.t('agents').find((x) => x.id === w0.agent)?.name || w0.agent}: ${w0.reason}` : null); since = wfs.find((w) => w.id === w0.workflow)?.updated_at;
+        why.push(`Waiting on ${w0.agent}: ${w0.reason}`);
+        if (w0.workflow) refs.push(`workflow:${w0.workflow}`); if (w0.task) refs.push(`task:${w0.task}`); if (w0.request) refs.push(`request:${w0.request}`);
       } else if (ext || shipping.length) {
         status = 'waiting_external';
         if (ext) { task = ext.objective; since = ext.updated_at; why.push(EXTERNAL_WAIT[ext.stage]); refs.push(`workflow:${ext.id}`); }
@@ -396,7 +401,7 @@ export function workload(S, desks) {
 export function dependencies(desks) {
   const out = [];
   for (const s of Object.values(desks)) {
-    for (const w of s.waitingOn) out.push({ agent: s.id, on: w.agent, kind: 'agent', reason: w.reason, ref: `workflow:${w.workflow}` });
+    for (const w of s.waitingOn) out.push({ agent: s.id, on: w.agent, kind: 'agent', reason: w.reason, ref: w.request ? `request:${w.request}` : `workflow:${w.workflow}` });
     if (s.needsYou) out.push({ agent: s.id, on: 'you', kind: 'owner', reason: s.needsYou, ref: s.refs[0] });
     if (s.status === 'waiting_external') out.push({ agent: s.id, on: 'customer/provider', kind: 'external', reason: s.why[0], ref: s.refs[0] });
   }

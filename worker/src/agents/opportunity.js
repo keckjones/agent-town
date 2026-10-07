@@ -4,6 +4,7 @@ import { db, say, requestApproval, getSettings } from '../lib/db.js';
 import { PLAIN_ENGLISH } from '../lib/explain.js';
 import { askJSON } from '../lib/claude.js';
 import { ensureWorkflow } from '../lib/workflows.js';
+import { NEEDS } from '../lib/collab.js';
 
 const CRITERIA = ['demand_evidence', 'acquisition_ease', 'competition', 'startup_cost', 'time_to_revenue', 'contribution_margin',
   'low_human_effort', 'fulfillment_reliability', 'platform_independence', 'low_downside', 'scalability'];
@@ -32,7 +33,8 @@ Return JSON {"opportunities": [ {
  "experiment": "a small validation test", "max_experiment_budget_usd": n, "experiment_days": n,
  "success_metrics": ["..."], "stop_conditions": ["..."],
  "economics": {"conservative": "...", "base": "...", "optimistic": "..."},
- "scores": {${CRITERIA.map((c) => `"${c}": 1-5`).join(', ')}}, "biggest_risk": "..." } ] } with exactly 2 opportunities.`,
+ "scores": {${CRITERIA.map((c) => `"${c}": 1-5`).join(', ')}}, "biggest_risk": "...",
+ "needs": [{"need": "one of: ${NEEDS.join(' | ')}", "title": "exactly what to make", "why": "...", "brief": {"audience": "...", "offer": "...", "call_to_action": "...", "topic": "...", "niche": "..."}}] (0-3 things other agents should make for the experiment, e.g. a landing page, a social brand, research) } ] } with exactly 2 opportunities.`,
     });
     const out = [];
     for (const o of (r.opportunities || []).slice(0, 2)) {
@@ -45,6 +47,7 @@ Return JSON {"opportunities": [ {
         `**Success:** ${(o.success_metrics || []).join('; ')}`, `**Stop if:** ${(o.stop_conditions || []).join('; ')}`,
         `**Economics (estimates):** conservative ${o.economics?.conservative}; base ${o.economics?.base}; optimistic ${o.economics?.optimistic}`,
         `**Biggest risk:** ${o.biggest_risk}`,
+        ...((o.needs || []).length ? ['**If approved, other agents will make:**', ...(o.needs || []).map((n) => `- ${n.title} (${n.need})`)] : []),
       ].join('\n');
       const { data: opp } = await db.from('opportunities').insert({ title: o.title, scores: { ...o.scores, total }, memo, data: o, budget_usd: 0 }).select().single();
       const wf = await ensureWorkflow({ dedupeKey: `ventures:opp:${opp.id}`, division: 'ventures', kind: 'opportunity', objective: `Evaluate: ${o.title}`,

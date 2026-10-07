@@ -21,6 +21,24 @@ Your computer isn't involved once it's set up.
 
 **Plain English everywhere:** every desk starts with "In plain English" (what the agent is for, what it's doing, what happens next, and a glossary of any jargon), every approval card explains what approving does, and research reports, opportunity memos and Big Boss answers are written for someone new to the business.
 
+**Agents work together.** When one agent needs something another agent makes, it sends a *team request*, and the request goes to the one agent who does that work:
+
+| Need | Done by |
+|---|---|
+| Landing page / website (hosted at `<worker>/p/<name>` after you approve) | Website Production |
+| Social media brand | Brand Development |
+| Social posts / brand content calendar | Social Content / Social Strategy |
+| Marketing campaign plan | Campaign Strategy |
+| Market research | Market Research |
+| Etsy product ideas / store products | Etsy Research / Dropship Research |
+| Local businesses to contact | Local Business Prospecting |
+| A small test with a goal and stop rule | Experiment Design |
+
+- **Give the Big Boss an idea** (Executive Office, or Projects & Requests). He turns it into a plan using only these capabilities, and anything outside them is listed as "only you can do". You approve the plan, then each step goes to its agent in order.
+- **Ideas from agents trigger requests too.** Opportunity memos list what other agents should make (a website, a brand, research), and approving the experiment sends those requests. A newly approved brand asks for its link-in-bio page. The Big Boss can request work during planning.
+- **Every request is a recorded handoff,** so the floor shows the line and the walk. The requesting desk shows "Waiting on another agent".
+- **Public results still need your approval** (a page going live, posts, emails). A daily cap (default 12 requests/day) keeps AI costs predictable.
+
 **Statuses** (always shown as icon + text + color): ▶ Working · ◷ Scheduled · ⇄ Waiting on another agent · ⧗ Waiting on a customer or provider · ! Needs approval · ✕ Blocked or failed · – Idle · Ⅱ Paused.
 
 Each status comes from the database. An agent shows **Working** only while its task row is running. **Handoff lines** are drawn only from `handoff` rows the worker writes when a workflow changes owner. The headset animation appears only during a connected, consented AI call, never for a drafted script. In-depth: `dashboard/js/floor-model.js`.
@@ -58,6 +76,7 @@ You can also save camera views, lock the camera, and choose the display: 3D full
    4. `supabase/004_brands_media.sql`
    5. `supabase/005_trading_floor.sql` (per-business pause, live floor)
    6. `supabase/006_plain_english.sql` (plain-English explanations on approval cards)
+   7. `supabase/007_collaboration.sql` (agents working together: projects, team requests, hosted landing pages)
 
    The dashboard shows a red "Database update needed" banner naming any file you've missed.
 3. Create your login: **Authentication → Users → Add user**. Tick **Auto Confirm User**. Then turn off "Allow new users to sign up".

@@ -2,6 +2,7 @@
 //  - the approval is still "approved" and the content is exactly what you approved (hash match),
 //  - it hasn't expired, and the town isn't paused.
 // Every external action is keyed, so a retry can never send, charge, or publish twice.
+import { requestWork, startProject, finishProject } from './lib/collab.js';
 import { config } from './config.js';
 import { db, must, say, addLedger } from './lib/db.js';
 import { sendMail, legalFooter } from './lib/mailer.js';
@@ -128,11 +129,35 @@ const executors = {
   async ceo_promotion(a) { await finish(a.id, 'executed', await executeMedia(a)); },
   async budget_allocation(a) { await finish(a.id, 'executed', { note: 'Division budgets recorded. No money was moved.' }); },
 
+  async project_plan(a) { await finish(a.id, 'executed', await startProject(a)); },
+  async site_publish(a) {
+    const { data: site } = await db.from('sites').select('*').eq('id', a.payload.site_id).single();
+    if (!site) throw new Error('Site not found');
+    await db.from('sites').update({ status: 'published', published_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', site.id);
+    if (site.brand_id) await db.from('brands').update({ storefront: a.payload.url, updated_at: new Date().toISOString() }).eq('id', site.brand_id);
+    if (site.request_id) {
+      const { data: r } = await db.from('work_requests').update({ status: 'done', result: { site_id: site.id, url: a.payload.url, note: 'Published' }, output_ref: `site:${site.id}`, updated_at: new Date().toISOString() }).eq('id', site.request_id).select().single();
+      if (r?.workflow_id) await logEvent(r.workflow_id, 'designer', 'result', `Landing page live: ${a.payload.url}`);
+      await finishProject(r?.project_id);
+    }
+    await say('designer', `Landing page is live: ${a.payload.url}`, 'success');
+    await finish(a.id, 'executed', { note: `Live at ${a.payload.url}`, url: a.payload.url });
+  },
+
   async opportunity_experiment(a) {
     const id = a.payload.opportunity_id;
     await db.from('opportunities').update({ status: 'approved_experiment', budget_usd: a.payload.budget_usd || 0, updated_at: new Date().toISOString() }).eq('id', id);
     if (a.payload.budget_usd) await addLedger({ division: 'ventures', category: 'commitment', amountUsd: a.payload.budget_usd, basis: 'forecast', source: 'approved experiment budget', externalId: `commit:opportunity:${id}` });
-    await finish(a.id, 'executed', { note: 'Experiment approved. Spending stays inside its budget.' });
+    // The memo listed what it needs from other agents (a website, a brand, research...): ask them now.
+    const { data: opp } = await db.from('opportunities').select('*').eq('id', id).single();
+    let asked = 0;
+    for (const n of (opp?.data?.needs || []).slice(0, 4)) {
+      if (!n?.need) continue;
+      await requestWork({ fromAgent: 'opportunity', need: n.need, title: n.title || `${n.need} for ${opp.title}`, brief: { ...(n.brief || {}), why: n.why, project_title: opp.title },
+        division: 'ventures', workflowId: a.workflow_id, dedupeKey: `opportunity:${id}:${n.need}:${String(n.title || '').slice(0, 40)}` });
+      asked++;
+    }
+    await finish(a.id, 'executed', { note: `Experiment approved. Spending stays inside its budget.${asked ? ` ${asked} request(s) sent to other agents (website, brand, research…).` : ''}` });
   },
 };
 

@@ -100,10 +100,12 @@ async function loop() {
 
 // Run a background job on a schedule, never overlapping itself, skipped while paused, errors logged not thrown.
 function every(expr, name, fn, { evenWhenPaused = false } = {}) {
-  let busy = false;
+  let busy = false, busySince = 0;
   cron.schedule(expr, async () => {
-    if (busy) return;
-    busy = true;
+    // A run that hangs (a network call that never returns) must not stop this job forever.
+    if (busy && Date.now() - busySince < 5 * 60000) return;
+    if (busy) console.error(`${name}: previous run stuck for 5+ minutes; starting a fresh run`);
+    busy = true; busySince = Date.now();
     try {
       if (!evenWhenPaused && await getSettings().then((s) => s.paused).catch(() => true)) return;
       await fn();

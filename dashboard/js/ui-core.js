@@ -84,7 +84,13 @@ export function approvalCard(a, S) {
     ${content}${extra.join('')}
     ${a.decision_note ? `<div class="note">${esc(a.decision_note)}</div>` : ''}
     ${res ? `<div class="note ${a.status === 'failed' ? 'err' : ''}">${esc(res)}</div>` : ''}
-    ${/Connect Gmail|Connection timeout|mail server/i.test(res || '') ? gmailConnectBox(S) : ''}
+    ${a.status === 'approved' ? (() => {
+      const hb = S.t('integrations').find((i) => i.id === 'approvals_runner');
+      const age = hb?.checked_at ? (Date.now() - new Date(hb.checked_at)) / 60000 : null;
+      const stale = age == null || age > 3;
+      return `<div class="note ${stale ? 'err' : ''}">${res ? '' : '⏳ Approved and queued. '}${hb?.checked_at ? `The worker last checked approved items ${ago(hb.checked_at)}.` : 'The worker hasn\'t reported checking approved items yet (it may still be on older code).'}${stale ? ' It should check every minute: if this stays stale, restart the worker (Railway → your service → Deployments → ⋮ on the newest one → Restart).' : ''}${a.result?.checked_at ? ` Last attempt on this item: ${ago(a.result.checked_at)}.` : ''}</div>`;
+    })() : ''}
+    ${a.status === 'approved' && !/Connect Gmail|Connection timeout|mail server/i.test(res || '') ? '' : /Connect Gmail|Connection timeout|mail server/i.test(res || '') ? gmailConnectBox(S) : ''}
     ${a.status === 'failed' ? `<div class="row"><button class="btn sm" data-act="retry-approval" data-id="${a.id}">Try again</button><span class="meta">Safe: if it never reached the provider it runs once; if it might have, it stops and tells you.</span></div>` : ''}
     ${editable ? `<div class="row">
       <button class="btn go" data-act="approve" data-id="${a.id}">Approve</button>

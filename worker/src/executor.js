@@ -160,6 +160,8 @@ export async function runApprovals() {
   // Per-business pause: approved items for a paused business wait (they are not cancelled).
   const { data: divs } = await db.from('divisions').select('id, status');
   const paused = new Set((divs || []).filter((d) => d.status === 'paused').map((d) => d.id));
+  // Heartbeat so the dashboard can show when approved items were last checked.
+  await db.from('integrations').upsert({ id: 'approvals_runner', name: 'Approval executor', status: 'connected', detail: `Checked ${(data || []).length} approved item(s)`, checked_at: new Date().toISOString(), division: 'hq' }).then(() => {}, () => {});
   for (const a of data || []) {
     if (a.division && paused.has(a.division)) {
       if (!a.result?.waiting?.startsWith('Business paused')) await db.from('approvals').update({ result: { waiting: 'Business paused by owner. This runs when you resume it.' } }).eq('id', a.id);
@@ -172,8 +174,8 @@ export async function runApprovals() {
     if (!fn) { await finish(a.id, 'failed', { error: `No executor for ${a.kind}` }); continue; }
     try { await fn(a); }
     catch (e) {
-      if (e.capped) { await db.from('approvals').update({ result: { waiting: e.message } }).eq('id', a.id); continue; }
-      if (/not set up yet|not connected/i.test(e.message)) { await db.from('approvals').update({ result: { waiting: e.message } }).eq('id', a.id); continue; }
+      if (e.capped) { await db.from('approvals').update({ result: { waiting: e.message, checked_at: new Date().toISOString() } }).eq('id', a.id); continue; }
+      if (/not set up yet|not connected/i.test(e.message)) { await db.from('approvals').update({ result: { waiting: e.message, checked_at: new Date().toISOString() } }).eq('id', a.id); continue; }
       await finish(a.id, 'failed', { error: e.message, duplicate_guard: e instanceof AlreadyAttempted });
       const wf = a.workflow_id ? { id: a.workflow_id } : null;
       await logEvent(wf?.id, a.agent_id, 'error', `Could not complete "${a.title}": ${e.message}`);

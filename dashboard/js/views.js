@@ -574,7 +574,16 @@ export function careerPanel(S, ui) {
     <span class="meta">Off = every email waits in Approvals so you can read it first. Even when on, an email with any warning still waits for you. Daily limit: ${esc(p.daily_cap || 5)} emails (new + follow-ups). One follow-up after ${esc(p.follow_up_business_days || 7)} business days.</span></div>
     ${p.sending_enabled ? `<button class="btn sm" data-act="career-sending" data-on="0">Pause career sending</button>` : ''}</div>`;
   const tabs = `<div class="row">${[['today', 'Today'], ['jobs', `Saved jobs (${jobs.length})`], ['contacts', `Contacts (${contacts.length})`], ['sent', `Emails (${sent.length})`], ['setup', 'Setup']].map(([k, l]) => `<button class="btn sm ${tab === k ? 'primary' : ''}" data-act="filter" data-id="${k === 'today' ? '' : k}">${l}</button>`).join('')}</div>`;
-  const questions = [...new Set(jobs.filter((j) => j.packet?.owner_questions).flatMap((j) => j.packet.owner_questions))];
+  const ans = p.answers || {};
+  const isSet = (k) => ans[k] !== undefined && ans[k] !== null && ans[k] !== '';
+  const ANSKEYS = { work_authorized: /authoriz/i, sponsorship: /sponsor/i, start_date: /start date/i, relocate: /relocat/i, salary: /salary/i, paragon: /paragon/i };
+  const questions = [...new Set(jobs.filter((j) => j.packet?.owner_questions).flatMap((j) => j.packet.owner_questions))].filter((q) => !Object.entries(ANSKEYS).some(([k, re]) => isSet(k) && re.test(q)));
+  const ynSel = (k) => `<select class="i" id="ca-${k}"><option value="">Not answered yet</option><option value="yes" ${ans[k] === true ? 'selected' : ''}>Yes</option><option value="no" ${ans[k] === false ? 'selected' : ''}>No</option></select>`;
+  const answersCard = `<form class="card" data-form="career-answers"><h4>Your answers for applications</h4><p class="meta">The agent uses exactly these and never guesses the blanks. Blank ones stay on the "only you can answer" list.</p>
+    <div class="grid2"><label class="f">Authorized to work in the US${ynSel('work_authorized')}</label><label class="f">Will need visa sponsorship (now or later)${ynSel('sponsorship')}</label>
+    <label class="f">Earliest full-time start<input class="i" id="ca-start_date" value="${esc(ans.start_date || '')}" placeholder="e.g. May 2027"></label><label class="f">Willing to relocate${ynSel('relocate')}</label>
+    <label class="f">Salary (if a form requires it)<input class="i" id="ca-salary" value="${esc(ans.salary || '')}" placeholder="e.g. Negotiable"></label><label class="f">Paragon: still there? exact dates<input class="i" id="ca-paragon" value="${esc(ans.paragon || '')}" placeholder="e.g. May 2026 – Aug 2026 (ended)"></label></div>
+    <button class="btn sm">Save answers</button></form>`;
 
   const jobCard = (j) => `<details class="card" ${ui.sub?.job === j.id ? 'open' : ''}><summary class="row between" style="cursor:pointer"><div><b>${esc(j.company)}</b> · ${esc(j.title)}<div class="meta">${esc(j.location || '')}${j.track ? ` · ${esc(TRACK[j.track] || j.track)}` : ''} · posting ${esc(j.posting_status)}${j.fit?.score ? ` · fit ${esc(j.fit.score)}/10` : ''}</div></div>${chip(JOB_STATUS[j.status] || j.status, ['submitted', 'interview', 'offer'].includes(j.status) ? 'ok' : j.status === 'packet_ready' || j.status === 'filled' ? 'warn' : '')}</summary>
     <div class="row">${j.url ? `<a class="btn sm" href="${esc(j.url)}" target="_blank" rel="noopener">Open posting ↗</a>` : ''}<button class="btn sm" data-act="career-review" data-id="${j.id}">${j.packet ? 'Redo packet' : 'Prepare packet'}</button>
@@ -599,7 +608,8 @@ export function careerPanel(S, ui) {
     ${m.subject ? `<div><b>Subject:</b> ${esc(m.subject)}</div>` : ''}<pre class="note">${esc(m.body || '')}</pre></details>`; };
 
   const today = [
-    questions.length ? `<div class="card"><h4>Questions only you can answer (for applications)</h4><ul>${questions.slice(0, 12).map((q) => `<li>${esc(q)}</li>`).join('')}</ul><p class="meta">The agent never guesses these or certifies anything for you. Answer them on the application itself, or tell me and I'll store the answers.</p></div>` : '',
+    Object.keys(ANSKEYS).some((k) => !isSet(k)) ? answersCard : '',
+    questions.length ? `<div class="card"><h4>Other questions only you can answer (for applications)</h4><ul>${questions.slice(0, 12).map((q) => `<li>${esc(q)}</li>`).join('')}</ul><p class="meta">The agent never guesses these or certifies anything for you. Answer them on the application itself, or tell me and I'll store the answers.</p></div>` : '',
     waiting.length ? `<div class="card"><h4>Emails waiting for your OK (${waiting.length})</h4>${waiting.map((m) => `<div class="meta">To ${esc(cName(m.contact_id)?.name || m.to_email)} · “${esc(m.subject)}”</div>`).join('')}<button class="btn sm primary" data-act="goto" data-id="approvals">Open Approvals</button></div>` : '',
     notes.length ? section(`LinkedIn notes for you to send (${notes.length})`, notes.map((m) => { const c = cName(m.contact_id); return `<div class="card"><b>${esc(c?.name || '')}</b> · ${esc(c?.title || '')} · ${esc(c?.company || '')}<pre class="note">${esc(m.body)}</pre>
       <div class="row"><button class="btn sm" data-act="copy" data-text="${esc(m.body)}">Copy note</button>${c?.linkedin_url ? `<a class="btn sm" href="${esc(c.linkedin_url)}" target="_blank" rel="noopener">Open their LinkedIn ↗</a>` : ''}<button class="btn sm primary" data-act="career-note-sent" data-id="${m.id}">I sent it</button><button class="btn sm" data-act="career-note-skip" data-id="${m.id}">Skip</button></div></div>`; }).join('')) : '',
@@ -619,7 +629,7 @@ export function careerPanel(S, ui) {
       ${contacts.slice().sort((a, b) => a.priority - b.priority || a.company.localeCompare(b.company)).map(contactRow).join('') || '<p class="muted">No contacts yet.</p>'}
       <form class="card" data-form="career-add-contact"><h4>Add someone you know or found</h4><div class="grid2"><input class="i" id="cc-name" placeholder="Name"><input class="i" id="cc-title" placeholder="Title"><input class="i" id="cc-company" placeholder="Company"><input class="i" id="cc-email" placeholder="Email (optional)"><input class="i" id="cc-src" placeholder="Where the email is shown (link) — leave empty if they gave it to you"><input class="i" id="cc-li" placeholder="LinkedIn profile link (optional)"></div><input class="i" id="cc-notes" placeholder="How you know them (e.g. met at the career fair) — only true facts"><button class="btn sm">Add</button></form>` : '',
     tab === 'sent' ? (msgs.filter((m) => m.status === 'sent' || m.direction === 'in').sort((a, b) => String(b.sent_at || b.created_at).localeCompare(String(a.sent_at || a.created_at))).map(msgRow).join('') || '<p class="muted">Nothing sent yet.</p>') : '',
-    tab === 'setup' ? setup : '',
+    tab === 'setup' ? setup + answersCard : '',
   ].join('');
 }
 

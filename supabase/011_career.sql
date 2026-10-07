@@ -31,6 +31,7 @@ create table if not exists career_profile (
   sending_enabled   boolean not null default false,               -- you confirm the old ChatGPT automation is off
   auto_send         boolean not null default false,               -- false: each email waits in Approvals
   multi_contact_companies text[] not null default '{}',           -- companies where several people may be contacted (e.g. Charles Schwab)
+  answers           jsonb not null default '{}',                  -- your answers for applications (authorization, start date, relocation, salary…)
   state             jsonb not null default '{}',                  -- agent bookkeeping (last contact research per company…)
   updated_at        timestamptz not null default now()
 );
@@ -120,3 +121,4 @@ end $$;
 insert into career_profile (id) values (1) on conflict (id) do nothing;
 alter table career_profile add column if not exists multi_contact_companies text[] not null default '{}';
 alter table career_profile add column if not exists state jsonb not null default '{}';
+alter table career_profile add column if not exists answers jsonb not null default '{}';

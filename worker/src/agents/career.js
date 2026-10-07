@@ -41,6 +41,18 @@ async function profile() {
   if (error) throw new Error('Career Office tables are missing: run supabase/011_career.sql.');
   return data;
 }
+// Your own answers (Career Office → Your answers). Only these may be stated; anything blank is never guessed.
+export const ANSWER_LABELS = { work_authorized: 'Authorized to work in the US', sponsorship: 'Will need visa sponsorship (now or in the future)', start_date: 'Earliest full-time start date', relocate: 'Willing to relocate', salary: 'Salary expectations', paragon: 'Paragon: current status and exact dates' };
+const yn = (v) => (v === true ? 'Yes' : v === false ? 'No' : v);
+const known = (p) => Object.fromEntries(Object.entries(p.answers || {}).filter(([, v]) => v !== null && v !== undefined && v !== ''));
+function answersRule(p) {
+  const a = known(p);
+  return [
+    a.start_date ? `You may say full-time availability begins ${a.start_date}; never say "immediately".` : 'Never state a start date or availability to start immediately.',
+    a.relocate === true ? 'You may say you are open to relocating when the role is in another city (only if relevant).' : 'Never state willingness to relocate.',
+    'Never mention salary or compensation in an email.',
+  ].join(' ');
+}
 const signatureOf = (p) => p.signature || [p.full_name || 'Keck Jones', p.phone, p.sender_email].filter(Boolean).join('\n');
 
 // What the writer may and may not say. Kept strict on purpose: these go out under your name.
@@ -50,7 +62,7 @@ Hard rules:
 - Use ONLY facts in the resume and profile below. Never invent licenses, certifications, deal or transaction experience, modeling
   skills, results, mutual connections or referrals. Never claim to know the recipient unless the notes say so.
 - ${(p.rules?.never || []).join('\n- ') || 'Do not claim current employment anywhere unless the profile says so.'}
-- Never state availability to start full-time immediately, willingness to relocate, or compensation expectations.
+- ${answersRule(p)}
 - Pick the ONE career track that fits this recipient and the role; don't list unrelated interests.
 - Include: a specific reason for contacting this company/person, the most relevant part of the background, and a clear, modest ask
   (a short conversation, recruiting guidance, or consideration for a fitting role).
@@ -115,7 +127,9 @@ export function checkClaims(p, body, attach) {
   const out = [];
   for (const co of p.rules?.not_current || []) if (new RegExp(`(currently|presently|now)\\s+(work(ing)?|employed|interning)\\s+(at|with|for)\\s+${co}`, 'i').test(t) || new RegExp(`${co}[^.]{0,40}\\b(currently|where I am now)`, 'i').test(t)) out.push(`Says you currently work at ${co}`);
   if (/\b(refer(r)?ed me|referral from)\b/i.test(t)) out.push('Mentions a referral');
-  if (/\b(start (full[- ]time )?immediately|available immediately|willing to relocate|salary|compensation)\b/i.test(t)) out.push('Mentions availability, relocation or pay');
+  if (/\b(start (full[- ]time )?immediately|available immediately)\b/i.test(t)) out.push('Says you can start immediately');
+  if (/\b(salary|compensation)\b/i.test(t)) out.push('Mentions pay');
+  if (/\b(relocat\w*)\b/i.test(t) && p.answers?.relocate !== true) out.push('Mentions relocation, but you haven\'t said you will relocate');
   if (!attach && /\battach(ed)?\b/i.test(t)) out.push('Mentions an attachment, but none is attached');
   return out;
 }
@@ -320,11 +334,17 @@ export const handlers = {
     const { askJSON } = await import('../lib/claude.js');
     const r = await askJSON({ agentId: 'career', maxTokens: 2500, system: PACKET_SYSTEM,
       prompt: `Resume:\n${p.resume_text}\n\nGoals: ${JSON.stringify(p.goals || {})}\nRules: ${JSON.stringify(p.rules || {})}
+The candidate's own answers (use exactly; don't ask again): ${JSON.stringify(known(p))}
 Job: ${j.title} at ${j.company} (${j.location || 'location not given'}). Link: ${j.url || 'none'}
 ${j.posting_text ? `Job description (pasted by the owner):\n${j.posting_text.slice(0, 8000)}` : 'No job description was pasted; base the packet on the title, company and location, and say which details to confirm on the posting.'}` });
-    const packet = { ...(r.packet || {}), owner_questions: [...new Set([...(r.packet?.owner_questions || []),
-      'Work authorization / sponsorship', 'Earliest start date (graduating May 2027)', 'Salary expectations (only if the form requires it)', 'Willing to relocate / work on-site in this city?',
-      'If asked: are you currently employed at Paragon, and the exact dates?', 'Voluntary self-identification answers (gender, race, veteran, disability): your choice'])] };
+    // Your saved answers become ready-to-paste answers; only what's still unknown stays on the "only you can answer" list.
+    const a = known(p);
+    const defaults = { work_authorized: 'Are you authorized to work in the US?', sponsorship: 'Will you need visa sponsorship now or in the future?', start_date: 'Earliest start date', relocate: 'Willing to relocate / work on-site in this city?', salary: 'Salary expectations (only if the form requires it)', paragon: 'If asked: are you currently employed at Paragon, and the exact dates?' };
+    const mine = Object.entries(defaults).filter(([k]) => k in a).map(([k, q]) => ({ q, a: String(yn(a[k])), yours: true }));
+    const unknown = Object.entries(defaults).filter(([k]) => !(k in a)).map(([, q]) => q);
+    const modelQs = (r.packet?.owner_questions || []).filter((q) => !mine.some((m) => new RegExp(m.q.split(/\W+/).filter((w) => w.length > 5).slice(0, 2).join('|'), 'i').test(q)));
+    const packet = { ...(r.packet || {}), answers: [...mine, ...(r.packet?.answers || [])],
+      owner_questions: [...new Set([...modelQs, ...unknown, 'Voluntary self-identification answers (gender, race, veteran, disability): your choice'])] };
     await db.from('career_jobs').update({ status: 'packet_ready', track: r.track || j.track, fit: r.fit || null, packet, updated_at: now() }).eq('id', j.id);
     await say('career', `Application packet ready: ${j.title} at ${j.company} (fit ${r.fit?.score ?? '?'}/10${r.fit?.gaps?.length ? `, ${r.fit.gaps.length} gap${r.fit.gaps.length > 1 ? 's' : ''} flagged` : ''}).`, 'success');
     return { job_id: j.id, fit: r.fit?.score };

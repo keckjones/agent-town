@@ -704,6 +704,12 @@ const CHANGE = {
   },
 };
 const FORMS = {
+  async 'career-answers'(f) {
+    const yn = (k) => { const v = val(`ca-${k}`, f); return v === 'yes' ? true : v === 'no' ? false : null; };
+    const answers = { work_authorized: yn('work_authorized'), sponsorship: yn('sponsorship'), start_date: val('ca-start_date', f) || null, relocate: yn('relocate'), salary: val('ca-salary', f) || null, paragon: val('ca-paragon', f) || null };
+    await S.update('career_profile', { id: 1 }, { answers });
+    if (!S.demo) toast('Saved. Click "Redo packet" on a job to use them, or they apply to the next packets automatically.');
+  },
   async 'career-posting'(f) {
     const id = Number(f.dataset.id); const text = val(`cp-${id}`, f);
     await S.update('career_jobs', { id }, { posting_text: text || null, status: 'reviewing' });

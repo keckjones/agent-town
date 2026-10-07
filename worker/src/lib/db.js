@@ -71,12 +71,16 @@ export async function requestApproval({
   reason = null, evidence = null, costUsd = 0, maxExposureUsd = 0, expectedOutcome = null, uncertainty = null,
   scope = null, reversible = true, expiresInHours = null, standing = false,
 }) {
-  return must(await db.from('approvals').insert({
+  const row = must(await db.from('approvals').insert({
     agent_id: agentId, kind, title, payload, preview, prospect_id: prospectId, workflow_id: workflowId, division,
     reason, evidence, cost_usd: costUsd, max_exposure_usd: maxExposureUsd, expected_outcome: expectedOutcome,
     uncertainty, scope, reversible, standing,
     expires_at: expiresInHours ? new Date(Date.now() + expiresInHours * 3600e3).toISOString() : null,
   }).select().single());
+  // A plain-English explanation for the owner (stored separately so a missing column never blocks the approval).
+  const { explainApproval } = await import('./explain.js');
+  await explainApproval(row);
+  return row;
 }
 
 /** Record a money movement. external_id makes it idempotent (the same payment is never counted twice). */

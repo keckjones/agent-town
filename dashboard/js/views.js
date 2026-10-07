@@ -6,6 +6,7 @@ import { esc, ago, ct, chip, md, kpi, section, statusChip, table, approvalCard, 
 import * as M from './metrics.js';
 import * as F from './floor-model.js';
 import { PANELS } from './panels.js';
+import { AGENT_EXPLAIN, TASK_EXPLAIN, termsIn } from './explain.js';
 
 const money = M.money;
 const n = (v) => Number(v || 0);
@@ -83,6 +84,7 @@ export function deskPanel(S, ui, ctx) {
       </div>
       ${biz?.status === 'paused' ? '<div class="note warn">This business is paused.</div>' : ''}
     </div>`,
+    plainEnglish(S, d, a, running || tasks[0], wf, appr),
     section('Current assignment', wf ? `<dl class="facts"><dt>Purpose</dt><dd>${refBtn(`workflow:${wf.id}`, wf.objective)}</dd><dt>Stage</dt><dd>${esc(F.stageLabel(wf.stage))} ${statusChip(wf.status)}</dd>
       ${subj?.name ? `<dt>Involves</dt><dd>${subjectRef(subj.type, subj.id) ? refBtn(subjectRef(subj.type, subj.id), subj.name) : esc(subj.name)}</dd>` : ''}
       ${wf.blockers ? `<dt>Blocker</dt><dd class="down">${esc(wf.blockers)}</dd>` : ''}${wf.recovery ? `<dt>To fix</dt><dd>${esc(wf.recovery)}</dd>` : ''}</dl>`
@@ -107,6 +109,27 @@ export function deskPanel(S, ui, ctx) {
     section('Next scheduled action', `<p>${esc(d.next || 'Nothing scheduled.')}${d.nextAt ? ` <span class="faint">(${ct(d.nextAt)})</span>` : ''}</p>${F.SCHEDULES[id] ? `<div class="meta">Recurring: ${esc(F.SCHEDULES[id])}</div>` : ''}`),
     section('Recorded actions', evs.length ? `<div class="timeline">${evs.map((e) => `<div class="ev"><time>${ct(e.created_at)}</time>${refBtn(`event:${e.id}`, e.message, `lnk ${e.level === 'error' ? 'down' : e.level === 'warn' ? 'gold' : ''}`)}</div>`).join('')}</div>` : '<p class="muted">No recorded actions yet.</p>'),
   ].join('');
+}
+
+/** "In plain English": what this agent is for, what it's doing right now, what happens next, and the jargon defined. */
+function plainEnglish(S, d, a, task, wf, appr) {
+  const doing = task && (task.status === 'running' || d.status === 'working') ? TASK_EXPLAIN[task.kind] : null;
+  const last = task && !doing ? TASK_EXPLAIN[task.kind] : null;
+  const status = {
+    working: 'It is working on this right now.', scheduled: 'Nothing is running right now; its next job is already on the schedule.',
+    waiting_agent: 'It is waiting for another agent to finish their part before it can continue.', waiting_external: 'It is waiting on someone outside the company (a customer, supplier or platform) to respond.',
+    needs_approval: 'It finished its part and is waiting for you to decide.', blocked: 'Something went wrong or a check failed, so it stopped instead of guessing. The details below say what and how to fix it.',
+    idle: 'It has no task right now and will start again when its next job is scheduled or assigned.', paused: 'It is paused, so it takes no new work until you resume it.',
+  }[d.status];
+  const words = [d.task, d.why.join(' '), wf?.objective, wf?.next_action, appr[0]?.title, appr[0]?.reason, AGENT_EXPLAIN[a.id]].join(' ');
+  const terms = termsIn(words);
+  return section('In plain English', `<div class="plain">
+    <p><b>What this agent is for:</b> ${esc(AGENT_EXPLAIN[a.id] || a.role || '')}</p>
+    ${doing ? `<p><b>What it's doing:</b> ${esc(doing)}</p>` : last ? `<p><b>Last thing it did:</b> ${esc(last)}</p>` : ''}
+    <p><b>Right now:</b> ${esc(status || '')}${d.needsYou ? ` <b class="gold">You need to: ${esc(d.needsYou)}.</b>` : ''}</p>
+    ${wf ? `<p><b>The bigger goal:</b> ${esc(wf.objective)}. It's at the "${esc(F.stageLabel(wf.stage))}" step${wf.next_action ? `; next: ${esc(wf.next_action)}` : ''}.</p>` : ''}
+    ${terms.length ? `<details class="x"><summary>Words used here</summary><dl class="facts">${terms.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></details>` : ''}
+  </div>`);
 }
 
 function contentCard(S, c) {

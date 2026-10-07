@@ -40,14 +40,15 @@ export function drawWall(canvas, { title, accent, rows = [], foot = '' }) {
 function drawDeskScreen(canvas, d) {
   const g = canvas.getContext('2d'); const W = canvas.width, H = canvas.height;
   const st = STATUS[d.status];
+  const k = W / 256;
   bg(g, W, H, st.color);
   g.textBaseline = 'top';
-  g.fillStyle = '#e6edf6'; g.font = `600 30px ${FONT_D}`; g.fillText(fit(g, d.name, W - 20), 10, 12);
-  g.fillStyle = st.color; g.font = `600 22px ${FONT_M}`; g.fillText(fit(g, `${st.icon} ${st.label}`, W - 20), 10, 50);
-  g.fillStyle = '#9aa6b8'; g.font = `500 19px ${FONT_M}`;
-  const words = String(d.task || d.why?.[0] || '').split(' '); let line = '', y = 84;
-  for (const w of words) { const t = line ? `${line} ${w}` : w; if (g.measureText(t).width > W - 20) { g.fillText(line, 10, y); y += 22; line = w; if (y > H - 24) { line = ''; break; } } else line = t; }
-  if (line && y <= H - 24) g.fillText(fit(g, line, W - 20), 10, y);
+  g.fillStyle = '#eef3fa'; g.font = `600 ${30 * k}px ${FONT_D}`; g.fillText(fit(g, d.name, W - 20 * k), 10 * k, 12 * k);
+  g.fillStyle = st.color; g.font = `600 ${22 * k}px ${FONT_M}`; g.fillText(fit(g, `${st.icon} ${st.label}`, W - 20 * k), 10 * k, 50 * k);
+  g.fillStyle = '#b3bdcc'; g.font = `500 ${19 * k}px ${FONT_M}`;
+  const words = String(d.task || d.why?.[0] || '').split(' '); let line = '', y = 84 * k;
+  for (const w of words) { const t = line ? `${line} ${w}` : w; if (g.measureText(t).width > W - 20 * k) { g.fillText(line, 10 * k, y); y += 22 * k; line = w; if (y > H - 24 * k) { line = ''; break; } } else line = t; }
+  if (line && y <= H - 24 * k) g.fillText(fit(g, line, W - 20 * k), 10 * k, y);
   if (d.status === 'paused') { g.fillStyle = 'rgba(5,8,13,0.55)'; g.fillRect(0, 0, W, H); }
 }
 function drawSign(canvas, dept, w) {
@@ -74,10 +75,11 @@ const hash = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.char
 const SKIN = ['#f1c7a5', '#d9a47c', '#b07a52', '#8a5a3b', '#5e3d29', '#e8b896'];
 const HAIR = ['#1b1410', '#3b2a1e', '#6b4a2b', '#a0743f', '#d8c08a', '#2b2b2b', '#7a2e1d'];
 
-export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reducedMotion = false, fixed = false }) {
+export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reducedMotion = false, fixed = false, ambient = true }) {
   const low = quality === 'low';
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !low, powerPreference: low ? 'low-power' : 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, low ? 1 : 1.75));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, low ? 1 : 2));
+  const maxAniso = renderer.capabilities.getMaxAnisotropy();
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.15;
@@ -120,12 +122,21 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     paper: new THREE.PlaneGeometry(0.26, 0.34),
     headset: new THREE.TorusGeometry(0.17, 0.018, 6, 20, Math.PI),
     mic: new THREE.BoxGeometry(0.02, 0.02, 0.16),
+    keyboard: new THREE.BoxGeometry(0.46, 0.02, 0.15),
+    mouse: new THREE.BoxGeometry(0.06, 0.025, 0.1),
+    mug: new THREE.CylinderGeometry(0.045, 0.04, 0.1, 10),
+    thigh: new THREE.BoxGeometry(0.13, 0.13, 0.44),
+    shin: new THREE.BoxGeometry(0.11, 0.11, 0.44),
+    shoe: new THREE.BoxGeometry(0.12, 0.07, 0.2),
+    neck: new THREE.CylinderGeometry(0.06, 0.07, 0.1, 8),
   };
+  const pantsMat = new THREE.MeshStandardMaterial({ color: '#22262e', roughness: 0.85 });
+  const shoeMat = new THREE.MeshStandardMaterial({ color: '#111317', roughness: 0.6 });
   const statusMat = Object.fromEntries(Object.values(STATUS).map((s) => [s.key, new THREE.MeshBasicMaterial({ color: s.color })]));
   const textures = new Set();
   const screenMesh = (w, h, cw, ch) => {
     const c = document.createElement('canvas'); c.width = cw; c.height = ch;
-    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; textures.add(tex);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.generateMipmaps = true; textures.add(tex);
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
     return { mesh: m, canvas: c, tex, key: '' };
   };
@@ -141,7 +152,37 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
   const grid = new THREE.GridHelper(84, 42, '#152238', '#0f1826'); grid.position.set(0, 0.005, -2); grid.material.transparent = true; grid.material.opacity = 0.35; scene.add(grid);
   const back = new THREE.Mesh(new THREE.BoxGeometry(84, 16, 0.5), mat.wall); back.position.set(0, 8, -27); scene.add(back);
   for (const x of [-42, 42]) { const s = new THREE.Mesh(new THREE.BoxGeometry(0.5, 16, 50), mat.wall); s.position.set(x, 8, -4); scene.add(s); }
-  // Ceiling light strips (no ceiling mesh, so the elevated camera always sees in).
+  // Pillars along the side walls and a skirting light line.
+  const pillarGeo = new THREE.BoxGeometry(0.8, 16, 0.8);
+  for (const x of [-41.4, 41.4]) for (const z of [-22, -12, -2, 8, 18]) { const p = new THREE.Mesh(pillarGeo, mat.metal); p.position.set(x, 8, z); scene.add(p); }
+  const skirt = new THREE.Mesh(new THREE.BoxGeometry(84, 0.06, 0.06), new THREE.MeshBasicMaterial({ color: '#3aa0ff' })); skirt.position.set(0, 0.05, -26.7); scene.add(skirt);
+  // Break areas: a coffee bar (left) and a water cooler (right). Idle agents sometimes walk here; it's labeled as a break.
+  const plantPot = new THREE.CylinderGeometry(0.28, 0.22, 0.5, 12), plantLeaf = new THREE.IcosahedronGeometry(0.55, 1);
+  const potMat = new THREE.MeshStandardMaterial({ color: '#30353d', roughness: 0.8 }), leafMat = new THREE.MeshStandardMaterial({ color: '#2f6b46', roughness: 0.9, flatShading: true });
+  const plant = (x, z, s = 1) => { const g = new THREE.Group(); const pot = new THREE.Mesh(plantPot, potMat); pot.position.y = 0.25; g.add(pot); const l = new THREE.Mesh(plantLeaf, leafMat); l.position.y = 0.95; l.scale.set(1, 1.3, 1); g.add(l); g.position.set(x, 0, z); g.scale.setScalar(s); scene.add(g); };
+  const BREAK = { coffee: new THREE.Vector3(-36.5, 0, 4.2), water: new THREE.Vector3(36.5, 0, 4.2) };
+  { const bar = new THREE.Group(); bar.position.set(-39, 0, 4);
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.05, 5), mat.wood); counter.position.y = 0.52; bar.add(counter);
+    const topS = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.06, 5.1), mat.deskTop); topS.position.y = 1.07; bar.add(topS);
+    const machine = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.5), mat.metal); machine.position.set(0, 1.45, -1); bar.add(machine);
+    const glow = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.15, 0.3), new THREE.MeshBasicMaterial({ color: '#ffb35c' })); glow.position.set(0.31, 1.55, -1); bar.add(glow);
+    for (let i = 0; i < 3; i++) { const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.12, 10), mat.paper); cup.position.set(0, 1.16, 0.4 + i * 0.25); bar.add(cup); }
+    scene.add(bar); }
+  { const wc = new THREE.Group(); wc.position.set(39, 0, 4);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.0, 0.5), new THREE.MeshStandardMaterial({ color: '#d7dde6', roughness: 0.6 })); body.position.y = 0.5; wc.add(body);
+    const jug = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.45, 16), new THREE.MeshPhysicalMaterial({ color: '#7fc4ff', transparent: true, opacity: 0.55, roughness: 0.1 })); jug.position.y = 1.25; wc.add(jug);
+    scene.add(wc); }
+  for (const [x, z] of [[-38, 0], [-38, 8.5], [38, 0], [38, 8.5], [-11, -24.5], [11, -24.5], [-34, -24.5], [34, -24.5], [-34, 18.5], [34, 18.5]]) plant(x, z, 1.1);
+  // LED ticker band across the top of the back wall: scrolls the same recorded events as the bottom ticker.
+  const led = screenMesh(84, 1.1, 4096, 64); led.mesh.position.set(0, 15.2, -26.7); scene.add(led.mesh);
+  led.tex.wrapS = THREE.RepeatWrapping; led.tex.repeat.set(1, 1);
+  // Shared animated monitor content (only shown on desks with a verified running task).
+  const loopTex = (draw, w = 256, h = 256) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 0.55); textures.add(t); return t; };
+  const codeTex = loopTex((g, w, h) => { g.fillStyle = '#0b1522'; g.fillRect(0, 0, w, h); for (let y = 6; y < h; y += 10) { const ind = (y * 7) % 40; const len = 40 + ((y * 37) % 150); g.fillStyle = ['#3aa0ff', '#9aa6b8', '#2fd38a', '#c79bff'][(y / 10) % 4 | 0]; g.globalAlpha = 0.85; g.fillRect(10 + ind, y, len, 4); } g.globalAlpha = 1; });
+  const docTex = loopTex((g, w, h) => { g.fillStyle = '#e9edf2'; g.fillRect(0, 0, w, h); g.fillStyle = '#3a4352'; g.fillRect(16, 10, 120, 10); for (let y = 30; y < h; y += 12) { g.fillStyle = '#8a94a3'; g.fillRect(16, y, 160 + ((y * 13) % 60), 5); } g.strokeStyle = '#2fd38a'; g.lineWidth = 3; g.strokeRect(190, 60, 40, 40); });
+  const vidTex = loopTex((g, w, h) => { g.fillStyle = '#1a0f22'; g.fillRect(0, 0, w, h); g.fillStyle = '#ff8bd1'; g.fillRect(20, 20, 216, 120); g.fillStyle = '#2a1a35'; g.fillRect(0, 160, w, 96); for (let x = 4; x < w; x += 22) { g.fillStyle = ['#ff8bd1', '#5fd0e6', '#f2c14e'][(x / 22) % 3 | 0]; g.fillRect(x, 175 + ((x * 3) % 40), 18, 14); } g.fillStyle = '#fff'; g.fillRect(128, 160, 2, 96); }, 256, 256);
+  const screenMat = { typing: new THREE.MeshBasicMaterial({ map: codeTex, toneMapped: false }), reviewing: new THREE.MeshBasicMaterial({ map: docTex, toneMapped: false }), editing_video: new THREE.MeshBasicMaterial({ map: vidTex, toneMapped: false }), call: new THREE.MeshBasicMaterial({ map: codeTex, toneMapped: false }), off: new THREE.MeshBasicMaterial({ color: '#08101a', toneMapped: false }) };
 
   // ---------- display walls ----------
   const walls = {};
@@ -153,7 +194,7 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     { id: 'attention', pos: [41.7, 6.5, -6], rot: -Math.PI / 2, size: [18, 7.4] },
   ];
   for (const w of wallDefs) {
-    const s = screenMesh(w.size[0], w.size[1], 1280, Math.round((1280 * w.size[1]) / w.size[0]));
+    const s = screenMesh(w.size[0], w.size[1], 2048, Math.round((2048 * w.size[1]) / w.size[0]));
     s.mesh.position.set(...w.pos); s.mesh.rotation.y = w.rot; s.mesh.userData.pick = { type: 'wall', id: w.id }; scene.add(s.mesh);
     const frame = new THREE.Mesh(new THREE.BoxGeometry(w.size[0] + 0.5, w.size[1] + 0.5, 0.2), mat.bezel);
     frame.position.set(...w.pos); frame.rotation.y = w.rot; frame.translateZ(-0.12); scene.add(frame);
@@ -174,12 +215,13 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.12, GH, 0.12), mat.metal); m.position.set(x, EXEC.top + GH / 2, z); exec.add(m);
   }
   const execBack = new THREE.Mesh(new THREE.BoxGeometry(EXEC.w, GH, 0.2), mat.wall); execBack.position.set(0, EXEC.top + GH / 2, -EXEC.d / 2); exec.add(execBack);
-  const sign = screenMesh(4.2, 0.62, 840, 124); sign.mesh.position.set(0, EXEC.top + GH - 0.4, EXEC.d / 2 + 0.02); exec.add(sign.mesh);
-  { const g = sign.canvas.getContext('2d'); g.fillStyle = '#0a0f17'; g.fillRect(0, 0, 840, 124); g.fillStyle = '#f2c14e'; g.fillRect(0, 116, 840, 8); g.font = `600 64px ${FONT_D}`; g.textBaseline = 'middle'; g.fillStyle = '#f5e6bf'; const t = 'EXECUTIVE OFFICE'; g.fillText(t, (840 - g.measureText(t).width) / 2, 58); }
+  const sign = screenMesh(4.2, 0.62, 1680, 248); sign.mesh.position.set(0, EXEC.top + GH - 0.4, EXEC.d / 2 + 0.02); exec.add(sign.mesh);
+  const drawExecSign = () => { const g = sign.canvas.getContext('2d'); g.fillStyle = '#0a0f17'; g.fillRect(0, 0, 1680, 248); g.fillStyle = '#f2c14e'; g.fillRect(0, 232, 1680, 16); g.font = `600 128px ${FONT_D}`; g.textBaseline = 'middle'; g.fillStyle = '#f5e6bf'; const t = 'EXECUTIVE OFFICE'; g.fillText(t, (1680 - g.measureText(t).width) / 2, 116); sign.tex.needsUpdate = true; };
+  drawExecSign();
   // Three screens on the office's back wall.
   const execScreens = {};
   [['perf', -6], ['depts', 0], ['approvals', 6]].forEach(([id, x]) => {
-    const s = screenMesh(5.2, 2.9, 896, 500); s.mesh.position.set(x, EXEC.top + 2.6, -EXEC.d / 2 + 0.12); s.mesh.userData.pick = { type: 'exec', id }; exec.add(s.mesh); execScreens[id] = s;
+    const s = screenMesh(5.2, 2.9, 1344, 750); s.mesh.position.set(x, EXEC.top + 2.6, -EXEC.d / 2 + 0.12); s.mesh.userData.pick = { type: 'exec', id }; exec.add(s.mesh); execScreens[id] = s;
   });
   // Meeting table + chairs (CEO agents sit here when promoted).
   const table = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.7, 0.08, 40), mat.wood); table.position.set(-6, EXEC.top + 0.76, 1.2); exec.add(table);
@@ -199,7 +241,7 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     for (const x of [-(DESK_W / 2 - 0.1), DESK_W / 2 - 0.1]) { const l = new THREE.Mesh(geo.leg, mat.metal); l.position.set(x, 0.36, 0); g.add(l); }
     const strip = new THREE.Mesh(geo.strip, statusMat.idle); strip.position.set(0, 0.73, -0.41); g.add(strip);
     // monitors (left one carries the status screen)
-    const scr = screenMesh(0.58, 0.34, 256, 150);
+    const scr = screenMesh(0.58, 0.34, low ? 256 : 512, low ? 150 : 300);
     const mon = new THREE.Group(); mon.position.set(-0.32, 1.06, 0.25);
     const bez = new THREE.Mesh(geo.monitor, mat.bezel); mon.add(bez);
     scr.mesh.geometry.dispose(); scr.mesh.geometry = geo.screen; scr.mesh.position.z = -0.017; scr.mesh.rotation.y = Math.PI; mon.add(scr.mesh);
@@ -211,12 +253,15 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     const stand2 = new THREE.Mesh(geo.stand, mat.metal); stand2.position.set(0, -0.26, 0.02); mon2.add(stand2);
     mon2.rotation.y = -0.12; g.add(mon2);
     const beacon = new THREE.Mesh(geo.beacon, statusMat.idle); beacon.position.set(0, 1.42, 0.25); g.add(beacon);
+    const kb = new THREE.Mesh(geo.keyboard, mat.bezel); kb.position.set(0, 0.78, -0.08); g.add(kb);
+    const mouse = new THREE.Mesh(geo.mouse, mat.bezel); mouse.position.set(0.38, 0.78, -0.08); g.add(mouse);
+    if (hash(agent.id) % 3 === 0) { const mug = new THREE.Mesh(geo.mug, new THREE.MeshStandardMaterial({ color: ['#c0392b', '#2fd38a', '#e9edf2', '#3aa0ff'][hash(agent.id) % 4] })); mug.position.set(-0.6, 0.82, -0.1); g.add(mug); }
     // chair
     const chair = new THREE.Group(); chair.position.set(0, 0, -0.78);
     const seat = new THREE.Mesh(geo.seat, mat.chair); seat.position.y = 0.46; chair.add(seat);
     const backrest = new THREE.Mesh(geo.back, mat.chair); backrest.position.set(0, 0.8, -0.24); chair.add(backrest);
     const post = new THREE.Mesh(geo.post, mat.metal); post.position.y = 0.21; chair.add(post);
-    g.add(chair);
+    chair.userData.keep = true; g.add(chair);
     // person
     const h = hash(agent.id);
     const shirt = new THREE.MeshStandardMaterial({ color: new THREE.Color(deptAccent).multiplyScalar(0.55).lerp(new THREE.Color('#2a3140'), 0.35), roughness: 0.8 });
@@ -229,17 +274,29 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     const hair = new THREE.Mesh(geo.hair, hairM); hair.position.y = 0.012; hair.rotation.x = -0.25; headG.add(hair);
     const armL = new THREE.Mesh(geo.arm, shirt); armL.position.set(-0.2, 0.92, 0.2); armL.rotation.x = 0.55; person.add(armL);
     const armR = new THREE.Mesh(geo.arm, shirt); armR.position.set(0.2, 0.92, 0.2); armR.rotation.x = 0.55; person.add(armR);
+    const neck = new THREE.Mesh(geo.neck, skin); neck.position.y = 1.12; person.add(neck);
+    // Legs: hip pivot → thigh → knee pivot → shin + shoe. Seated: thighs forward, shins down.
+    const legs = [-0.1, 0.1].map((x) => {
+      const hip = new THREE.Group(); hip.position.set(x, 0.52, 0); person.add(hip);
+      const thigh = new THREE.Mesh(geo.thigh, pantsMat); thigh.position.z = 0.22; hip.add(thigh);
+      const knee = new THREE.Group(); knee.position.z = 0.44; hip.add(knee);
+      const shin = new THREE.Mesh(geo.shin, pantsMat); shin.position.z = 0.22; knee.add(shin);
+      const shoe = new THREE.Mesh(geo.shoe, shoeMat); shoe.position.set(0, 0.06, 0.45); knee.add(shoe);
+      hip.rotation.x = 0; knee.rotation.x = Math.PI / 2;
+      return { hip, knee };
+    });
     const paper = new THREE.Mesh(geo.paper, mat.paper); paper.position.set(0, 1.02, 0.36); paper.rotation.x = -1.0; paper.visible = false; person.add(paper);
     const headset = new THREE.Group(); headset.visible = false; headG.add(headset);
     const band = new THREE.Mesh(geo.headset, mat.bezel); band.rotation.z = 0; band.position.y = 0.02; headset.add(band);
     const mic = new THREE.Mesh(geo.mic, mat.bezel); mic.position.set(0.15, -0.08, 0.08); mic.rotation.y = -0.6; headset.add(mic);
-    g.add(person);
+    person.userData.keep = true; g.add(person);
     g.traverse((o) => { if (o.isMesh) o.userData.pick = { type: 'agent', id: agent.id }; });
-    return { group: g, screen: scr, scr2, strip, beacon, person, torso, headG, armL, armR, paper, headset, shirt, state: null, phase: (h % 1000) / 160, anchor: new THREE.Vector3() };
+    return { id: agent.id, group: g, screen: scr, scr2, strip, beacon, person, torso, headG, armL, armR, legs, paper, headset, shirt, state: null, phase: (h % 1000) / 160, anchor: new THREE.Vector3(), home: new THREE.Vector3(), walk: null };
   }
 
   function layout(agents) {
     // Rebuild only when the set of agents (or their department) changes.
+    for (const d of Object.values(desks)) if (d.walk) scene.remove(d.person);
     for (const c of Object.values(clusters)) { deskRoot.remove(c.group); }
     for (const k of Object.keys(clusters)) delete clusters[k];
     for (const k of Object.keys(desks)) delete desks[k];
@@ -259,7 +316,7 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
       const ang = (i / 6) * Math.PI * 2;
       const d = makeDesk(a, '#f2c14e');
       d.group.position.set(EXEC.x - 6 + Math.sin(ang) * 2.4, EXEC.top, EXEC.z + 1.2 + Math.cos(ang) * 2.4); d.group.rotation.y = ang + Math.PI;
-      d.group.children.slice(0, 6).forEach((m) => { m.visible = false; }); // no desk at the meeting table, just the person + chair
+      d.group.children.forEach((m) => { if (!m.userData.keep) m.visible = false; }); // no desk at the meeting table, just the person + chair
       execGroup.add(d.group); desks[a.id] = d;
     });
     // Department clusters.
@@ -282,14 +339,15 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
         group.add(d.group); desks[a.id] = d;
       });
       for (let p = 0; p < pods; p++) { const div = new THREE.Mesh(new THREE.BoxGeometry(podW - 0.5, 0.42, 0.04), mat.divider); div.position.set(-width / 2 + podW / 2 + p * (podW + 0.8), 0.98, 0); group.add(div); }
-      const signS = screenMesh(4, 1, 640, 160); signS.mesh.position.set(0, 4.2, 0); signS.mesh.userData.pick = { type: 'dept', id: dept.id }; group.add(signS.mesh);
+      const signS = screenMesh(4, 1, 1024, 256); signS.mesh.position.set(0, 4.2, 0); signS.mesh.userData.pick = { type: 'dept', id: dept.id }; group.add(signS.mesh);
       const signBack = signS.mesh.clone(); signBack.rotation.y = Math.PI; group.add(signBack);
       for (const x of [-1.6, 1.6]) { const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 4), mat.metal); wire.position.set(x, 6.7, 0); group.add(wire); }
       const light = low ? null : new THREE.PointLight('#dfe8ff', 1.4, 12, 1.6); if (light) { light.position.set(0, 3, 0); group.add(light); }
+
       carpet.userData.pick = { type: 'dept', id: dept.id };
       clusters[dept.id] = { group, sign: signS, carpet, light, dept, anchor: new THREE.Vector3(cx, 5.1, cz), width };
     }
-    for (const d of Object.values(desks)) { d.group.updateWorldMatrix(true, true); d.anchor.setFromMatrixPosition(d.group.matrixWorld).add(new THREE.Vector3(0, 1.75 * d.group.scale.y, 0)); }
+    for (const d of Object.values(desks)) { d.group.updateWorldMatrix(true, true); d.anchor.setFromMatrixPosition(d.group.matrixWorld).add(new THREE.Vector3(0, 1.75 * d.group.scale.y, 0)); d.home.copy(d.anchor); }
     buildLabels();
   }
 
@@ -332,6 +390,79 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
   }
   function clearArcs(filter = () => true) {
     for (let i = arcs.length - 1; i >= 0; i--) if (filter(arcs[i])) { const a = arcs[i]; scene.remove(a.line); scene.remove(a.dot); a.line.geometry.dispose(); a.el.remove(); arcs.splice(i, 1); }
+  }
+
+  // ---------- walking ----------
+  // Two kinds of walks, both tied to what the records say:
+  //  * handoff delivery: when a real handoff row arrives, the agent who handed off carries the folder to the next desk;
+  //  * breaks: an agent whose status is Idle may get up for coffee or water. Its tag says "Idle · on a break".
+  // Nobody walks in reduced-motion or simplified mode, and a working agent never leaves its desk.
+  const AISLE_Z = 4.2, SPEED = 2.4;
+  let ambientOn = ambient;
+  const tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
+  function deskFront(d, side = 0.7) {
+    // A standing spot beside the desk's chair, in world space.
+    d.group.updateWorldMatrix(true, false);
+    return new THREE.Vector3(side, 0, -1.25).applyMatrix4(d.group.matrixWorld).setY(0);
+  }
+  function seatPose(d) { d.person.position.set(0, 0, -0.74); d.person.rotation.set(0, 0, 0); for (const l of d.legs) { l.hip.rotation.x = 0; l.knee.rotation.x = Math.PI / 2; } d.armL.position.set(-0.2, 0.92, 0.2); d.armR.position.set(0.2, 0.92, 0.2); d.armL.rotation.x = d.armR.rotation.x = 0.55; }
+  function standPose(d) { d.armL.position.set(-0.24, 0.84, 0); d.armR.position.set(0.24, 0.84, 0); d.armL.rotation.x = d.armR.rotation.x = Math.PI / 2; for (const l of d.legs) { l.hip.rotation.x = Math.PI / 2; l.knee.rotation.x = 0; } }
+  function routeTo(from, to) {
+    const pts = [from.clone()];
+    if (Math.abs(from.z - to.z) > 1.5 || Math.abs(from.x - to.x) > 3) { pts.push(new THREE.Vector3(from.x, 0, AISLE_Z)); pts.push(new THREE.Vector3(to.x, 0, AISLE_Z)); }
+    pts.push(to.clone());
+    return pts;
+  }
+  function startWalk(id, target, kind, label) {
+    const d = desks[id];
+    if (!d || d.walk || reducedMotion || low || !d.state || d.state.status === 'working' || d.state.dept === 'exec') return false;
+    const start = deskFront(d, 0);
+    d.person.updateWorldMatrix(true, false);
+    scene.attach(d.person);
+    d.person.position.copy(start); d.person.position.y = 0.39; standPose(d);
+    d.paper.visible = kind === 'handoff';
+    d.paper.position.set(0.18, 1.12, 0.22); d.paper.rotation.set(-0.3, 0, 0);
+    d.walk = { kind, label, path: routeTo(start, target), i: 0, back: false, wait: kind === 'handoff' ? 2.2 : 4 + Math.random() * 3, waited: 0, start };
+    return true;
+  }
+  function endWalk(d) {
+    d.group.attach(d.person); seatPose(d); d.paper.visible = false;
+    d.paper.position.set(0, 1.02, 0.36); d.paper.rotation.set(-1.0, 0, 0);
+    d.walk = null;
+  }
+  function stepWalk(d, dt, time) {
+    const w = d.walk;
+    if (d.state?.status === 'working' && !w.back) { w.back = true; w.path = routeTo(d.person.position.clone().setY(0), w.start); w.i = 0; }
+    const target = w.path[w.i + 1];
+    if (!target) {
+      if (!w.back) { w.waited += dt; d.paper.visible = w.kind === 'handoff' && w.waited < w.wait * 0.5; if (w.waited < w.wait) { for (const l of d.legs) { l.hip.rotation.x = Math.PI / 2; l.knee.rotation.x = 0; } return; }
+        w.back = true; w.path = routeTo(d.person.position.clone().setY(0), w.start); w.i = 0; return; }
+      endWalk(d); return;
+    }
+    tmpV.copy(target).sub(d.person.position).setY(0);
+    const dist = tmpV.length();
+    if (dist < 0.05) { w.i++; return; }
+    const stepLen = Math.min(dist, SPEED * dt);
+    d.person.position.addScaledVector(tmpV.normalize(), stepLen);
+    d.person.position.y = 0.39 + Math.abs(Math.sin(time * 9)) * 0.03;
+    const yaw = Math.atan2(tmpV.x, tmpV.z);
+    d.person.rotation.set(0, yaw, 0);
+    const sw = Math.sin(time * 9 + d.phase);
+    d.legs[0].hip.rotation.x = Math.PI / 2 + sw * 0.45; d.legs[1].hip.rotation.x = Math.PI / 2 - sw * 0.45;
+    d.legs[0].knee.rotation.x = Math.max(0, -sw) * 0.6; d.legs[1].knee.rotation.x = Math.max(0, sw) * 0.6;
+    d.armL.rotation.x = Math.PI / 2 - sw * 0.35; d.armR.rotation.x = Math.PI / 2 + sw * 0.35;
+  }
+  let nextBreak = 6;
+  function maybeBreak(time) {
+    if (!ambientOn || reducedMotion || low || time < nextBreak) return;
+    nextBreak = time + 5 + Math.random() * 6;
+    const walking = Object.values(desks).filter((d) => d.walk?.kind === 'break').length;
+    if (walking >= 3) return;
+    const idle = Object.values(desks).filter((d) => !d.walk && d.state?.status === 'idle' && d.state.dept !== 'exec');
+    if (!idle.length) return;
+    const d = idle[Math.floor(Math.random() * idle.length)];
+    const spot = d.home.x < 0 ? BREAK.coffee : BREAK.water;
+    startWalk(d.id, spot.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.5, 0, (Math.random() - 0.5) * 3)), 'break', d.home.x < 0 ? 'coffee' : 'water');
   }
 
   // ---------- camera ----------
@@ -419,7 +550,7 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
       // Verified activity only: paper while reviewing, headset only on a connected AI call, video timeline while editing.
       desk.paper.visible = d.status === 'working' && d.activity === 'reviewing';
       desk.headset.visible = d.activity === 'call';
-      desk.scr2.material.color.set(d.status === 'working' ? (d.activity === 'editing_video' ? '#3a1d3a' : '#0f2236') : '#06090e');
+      desk.scr2.material = d.status === 'working' ? (screenMat[d.activity] || screenMat.typing) : screenMat.off;
       desk.person.visible = true;
       const dim = d.status === 'paused';
       desk.torso.material.opacity = dim ? 0.45 : 1; desk.torso.material.transparent = dim;
@@ -439,7 +570,7 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     for (const [id, el] of Object.entries(labelEls.desks)) {
       const d = data.desks[id]; if (!d) continue;
       const st = STATUS[d.status];
-      const html = `<span class="nm">${d.name}</span><span class="st" style="--c:${st.color}">${st.icon} ${st.label}</span>${d.task ? `<span class="tk">${String(d.task).replace(/[<>&]/g, '').slice(0, 70)}</span>` : ''}${d.since && d.status === 'working' ? `<span class="tm" data-since="${d.since}"></span>` : ''}${d.needsYou ? `<span class="ny">Needs you</span>` : ''}`;
+      const html = `<span class="nm">${d.name}</span><span class="st" style="--c:${st.color}">${st.icon} ${st.label}</span>${d.task ? `<span class="tk">${String(d.task).replace(/[<>&]/g, '').slice(0, 70)}</span>` : ''}${d.since && d.status === 'working' ? `<span class="tm" data-since="${d.since}"></span>` : ''}${d.needsYou ? `<span class="ny">Needs you</span>` : ''}<span class="wk"></span>`;
       if (el.dataset.h !== html) { el.dataset.h = html; el.innerHTML = html; }
       el.dataset.status = d.status;
       el.classList.toggle('needs', !!d.needsYou);
@@ -451,7 +582,20 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
       const sk = JSON.stringify(s); if (sk !== execScreens[id].key) { execScreens[id].key = sk; drawWall(execScreens[id].canvas, s); execScreens[id].tex.needsUpdate = true; }
     }
     // Handoffs: live arcs for new ones; in Workflow View, the recent ones stay up.
-    for (const h of data.newHandoffs || []) addArc(h);
+    for (const h of data.newHandoffs || []) {
+      addArc(h);
+      const to = desks[h.to];
+      if (to && h.from !== h.to) startWalk(h.from, deskFront(to, 0.75), 'handoff', h.label);
+    }
+    if (data.tickerText && data.tickerText !== led.key) {
+      led.key = data.tickerText;
+      const g = led.canvas.getContext('2d'); const W = led.canvas.width, H = led.canvas.height;
+      g.fillStyle = '#05080d'; g.fillRect(0, 0, W, H);
+      g.font = `600 ${H * 0.62}px ${FONT_M}`; g.textBaseline = 'middle';
+      let x = 20; for (const [txt, col] of data.tickerText.split('\u241e').map((t) => t.split('\u241f'))) { g.fillStyle = col || '#9fe3b5'; g.fillText(txt, x, H / 2); x += g.measureText(txt).width + 60; if (x > W) break; }
+      led.tex.needsUpdate = true;
+    }
+    lastData = data;
     if (current.mode === 'workflow') { for (const h of (data.recentHandoffs || []).slice(0, 12)) addArc(h, { persistent: true }); }
   };
   api.setMode = (mode, highlight = null) => {
@@ -459,6 +603,17 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     if (mode !== 'workflow') clearArcs((a) => a.persistent);
   };
   api.select = (id) => { current.selected = id; };
+  api.setAmbient = (v) => { ambientOn = !!v; };
+  // Redraw every canvas once the web fonts have loaded, so text isn't stuck in a fallback font.
+  let lastData = null;
+  document.fonts?.ready?.then(() => {
+    for (const d of Object.values(desks)) d.screen.key = '';
+    for (const c of Object.values(clusters)) if (c.sign) c.sign.key = '';
+    for (const w of Object.values(walls)) w.key = '';
+    for (const e of Object.values(execScreens)) e.key = '';
+    led.key = ''; drawExecSign();
+    if (lastData) api.update({ ...lastData, newHandoffs: [] });
+  });
 
   // ---------- resize / render loop ----------
   // When a side panel covers part of the canvas, shift the projection so the focused thing sits in the visible area.
@@ -504,6 +659,8 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     const time = (t - t0) / 1000;
     for (const desk of Object.values(desks)) {
       const d = desk.state; if (!d) continue;
+      if (desk.walk) { stepWalk(desk, dt, time); desk.person.getWorldPosition(desk.anchor); desk.anchor.y += 1.95; continue; }
+      if (!desk.anchor.equals(desk.home)) desk.anchor.copy(desk.home);
       const hi = relevant(d);
       desk.beacon.scale.setScalar(hi ? 1 : 0.6);
       if (reducedMotion || low) continue;
@@ -518,6 +675,8 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
       }
       if (d.status === 'blocked' || d.status === 'needs_approval') desk.beacon.scale.setScalar((hi ? 1 : 0.6) * (1 + Math.max(0, Math.sin(time * 3)) * 0.5));
     }
+    maybeBreak(time);
+    if (!reducedMotion) { codeTex.offset.y = (time * 0.08) % 1; docTex.offset.y = (time * 0.02) % 1; vidTex.offset.x = (time * 0.05) % 1; led.tex.offset.x = (time * 0.012) % 1; }
     // arcs: travel + fade
     for (let i = arcs.length - 1; i >= 0; i--) {
       const a = arcs[i]; const age = (performance.now() - a.born) / 1000;
@@ -534,25 +693,39 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
   function placeLabels() {
     const r = canvas.getBoundingClientRect();
     const camPos = camera.position;
+    // Labels never pile on top of each other: each one is placed only where it doesn't overlap one already placed
+    // (selected and urgent desks go first; then nearest). A crowded tag shrinks to name + status, or waits its turn.
+    const placed = [];
+    const overlaps = (x, y, w, h) => placed.some((b) => x < b.x + b.w + 4 && x + w + 4 > b.x && y < b.y + b.h + 3 && y + h + 3 > b.y);
+    const size = (el) => { let s = el._size; if (!s || s.html !== el.dataset.h || s.mini !== el.classList.contains('mini')) { s = el._size = { w: el.offsetWidth, h: el.offsetHeight, html: el.dataset.h, mini: el.classList.contains('mini') }; } return s; };
     for (const [id, el] of Object.entries(labelEls.depts)) {
       const c = clusters[id]; const p = project(c.anchor, r);
       el.style.display = p.vis ? '' : 'none';
-      if (p.vis) el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`;
+      if (p.vis) { el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`; const sz = size(el); placed.push({ x: p.x - sz.w / 2, y: p.y - sz.h, w: sz.w, h: sz.h }); }
     }
     // Desk tags: close-up only (LOD), plus anything needing you or blocked when the room is small.
     let shown = 0;
-    const entries = Object.entries(labelEls.desks).map(([id, el]) => [id, el, desks[id], camPos.distanceTo(desks[id]?.anchor || camPos)]).sort((a, b) => a[3] - b[3]);
+    const prio = (id, d) => (current.selected === id ? -1e6 : 0) + (d?.state?.needsYou || d?.state?.status === 'blocked' ? -1e4 : 0) + (d?.walk ? -1e3 : 0);
+    const entries = Object.entries(labelEls.desks).map(([id, el]) => [id, el, desks[id], camPos.distanceTo(desks[id]?.anchor || camPos)]).sort((a, b) => (prio(a[0], a[2]) + a[3]) - (prio(b[0], b[2]) + b[3]));
     for (const [id, el, desk, dist] of entries) {
       const d = desk?.state; if (!d) { el.style.display = 'none'; continue; }
       const near = dist < 17 || (focusKey === 'exec' && d.dept === 'exec');
       const urgent = d.needsYou || d.status === 'blocked';
-      const show = (near || (urgent && dist < 60) || current.selected === id || (focusKey === 'exec' && d.dept === 'exec')) && relevant(d) && shown < 40;
+      const show = (near || (urgent && dist < 60) || (desk.walk?.kind === 'handoff' && dist < 60) || current.selected === id || (focusKey === 'exec' && d.dept === 'exec')) && relevant(d) && shown < 40;
       const p = show ? project(desk.anchor, r) : null;
       if (!p || !p.vis) { el.style.display = 'none'; continue; }
       shown++;
       el.style.display = '';
+      const wk = desk.walk ? (desk.walk.kind === 'break' ? `☕ Idle · on a ${desk.walk.label === 'coffee' ? 'coffee' : 'water'} break` : `📁 Handing off: ${desk.walk.label}`) : '';
+      const wkEl = el.querySelector('.wk'); if (wkEl && wkEl.textContent !== wk) wkEl.textContent = wk;
       el.classList.toggle('mini', !near && current.selected !== id);
       el.classList.toggle('sel', current.selected === id);
+      let sz = size(el);
+      if (overlaps(p.x - sz.w / 2, p.y - sz.h, sz.w, sz.h) && current.selected !== id) {
+        el.classList.add('mini'); sz = size(el);
+        if (overlaps(p.x - sz.w / 2, p.y - sz.h, sz.w, sz.h)) { el.style.display = 'none'; shown--; continue; }
+      }
+      placed.push({ x: p.x - sz.w / 2, y: p.y - sz.h, w: sz.w, h: sz.h });
       el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`;
     }
     const recentPersistent = new Set(arcs.filter((a) => a.persistent).slice(-4));

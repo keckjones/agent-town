@@ -1,5 +1,6 @@
 // Mayor Mae: looks at the whole town, decides what everyone should do next, and queues the work.
 import { db, say, enqueue, getSettings, addDocument, startOfToday } from '../lib/db.js';
+import { PLAIN_ENGLISH } from '../lib/explain.js';
 import { askJSON, spentToday } from '../lib/claude.js';
 import { emailReady } from '../config.js';
 
@@ -25,7 +26,8 @@ Priorities: (1) keep the agency pipeline full but don't outrun the owner's appro
 (7) never propose new brands yourself (the owner starts those); keep approved brands' calendars filled only within their approved scope.
 Never assign work to a division whose integration is missing if the work would be wasted. Spend little; budgets are real money.
 Don't pile up work: if many approvals are waiting for the owner, create fewer new drafts and say so.
-Stay within the daily budget. Only assign tasks from the allowed list.`;
+Stay within the daily budget. Only assign tasks from the allowed list.
+In the summary and focus you write for the owner: ${PLAIN_ENGLISH}`;
 
 async function snapshot() {
   const settings = await getSettings();

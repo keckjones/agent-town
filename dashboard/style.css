@@ -78,7 +78,7 @@ a { color: var(--ops); }
 .stage-hud > * { pointer-events: auto; }
 .stage-ctrl { position: absolute; left: 16px; bottom: 14px; display: flex; gap: 6px; z-index: 2; flex-wrap: wrap; }
 .labels { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
-.label3d { position: absolute; transform: translate(-50%, -100%); pointer-events: auto; background: rgba(8, 11, 17, .78); border: 1px solid var(--line-2); border-radius: 6px; padding: 4px 8px; font: 600 12px var(--display); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; cursor: pointer; }
+.label3d { position: absolute; transform: translate(-50%, -100%); pointer-events: auto; background: rgba(8, 11, 17, .9); -webkit-font-smoothing: antialiased; border: 1px solid var(--line-2); border-radius: 6px; padding: 4px 8px; font: 600 12px var(--display); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; cursor: pointer; }
 .label3d .n { font: 500 11px var(--mono); color: var(--muted); margin-left: 6px; letter-spacing: 0; text-transform: none; }
 .label3d.hot { border-color: var(--gold); box-shadow: 0 0 14px rgba(242, 193, 78, .25); }
 
@@ -191,9 +191,9 @@ details.x > summary { cursor: pointer; color: var(--ops); font-size: 13px; }
 .label3d .n i { font-style: normal; margin-left: 6px; }
 .s-working { color: #3aa0ff; } .s-needs { color: var(--gold); } .s-blocked { color: var(--down); } .s-paused { color: #a3adbd; } .s-idle { color: var(--faint); }
 .label3d.desk { display: grid; gap: 1px; text-align: left; font: 500 11px var(--body); letter-spacing: 0; text-transform: none; padding: 5px 8px; max-width: 220px; white-space: normal; border-left: 3px solid var(--line-2); }
-.label3d.desk .nm { font: 600 12px var(--display); letter-spacing: .04em; text-transform: uppercase; }
+.label3d.desk .nm { font: 600 13px var(--display); letter-spacing: .04em; text-transform: uppercase; }
 .label3d.desk .st { color: var(--c); font: 600 10.5px var(--mono); }
-.label3d.desk .tk { color: var(--muted); font-size: 11px; line-height: 1.3; }
+.label3d.desk .tk { color: #c2cbd8; font-size: 11.5px; line-height: 1.35; }
 .label3d.desk .tm { font: 10.5px var(--mono); color: #3aa0ff; }
 .label3d.desk .ny { font: 700 10px var(--mono); color: #221800; background: var(--gold); border-radius: 3px; padding: 0 4px; justify-self: start; }
 .label3d.desk[data-status="blocked"] { border-left-color: var(--down); } .label3d.desk[data-status="needs_approval"] { border-left-color: var(--gold); } .label3d.desk[data-status="working"] { border-left-color: #3aa0ff; }
@@ -289,3 +289,9 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line-2); border-bottom-wid
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 .reduced *, .reduced *::before, .reduced *::after { animation: none !important; transition: none !important; }
+
+.plain { background: rgba(58,160,255,.07); border: 1px solid rgba(58,160,255,.25); border-radius: 8px; padding: 10px 12px; font-size: 13.5px; line-height: 1.5; }
+.plain p { margin: 0 0 6px; } .plain p:last-child { margin-bottom: 0; }
+.label3d.desk .wk { font: 600 10.5px var(--mono); color: #ffcf8a; }
+.label3d.desk .wk:empty { display: none; }
+.label3d.desk.mini .wk { display: block; }

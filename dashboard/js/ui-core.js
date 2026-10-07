@@ -1,5 +1,6 @@
 // Shared UI building blocks: escaping, formatting, cards, approval cards, agent explanations.
 import { money } from './metrics.js';
+import { APPROVAL_EXPLAIN, termsIn } from './explain.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const ago = (iso) => {
@@ -67,6 +68,8 @@ export function approvalCard(a, S) {
   return `<article class="card ${a.status === 'pending' ? 'prio' : ''} ${a.status === 'failed' ? 'err' : ''}" data-appr="${a.id}">
     <div class="row between"><h4>${esc(a.title)}</h4>${statusChip(a.status)}</div>
     <div class="meta">${esc(agent?.name || a.agent_id || '')} · ${ago(a.created_at)}${a.expires_at ? ` · expires ${ago(a.expires_at)}` : ''}${a.standing ? ' · STANDING APPROVAL' : ''}</div>
+    <div class="plain"><b>In plain English:</b> ${esc(a.explain || APPROVAL_EXPLAIN[a.kind] || 'Approving lets the agent take the action described below, exactly as written.')}${a.explain && APPROVAL_EXPLAIN[a.kind] ? `<div class="meta" style="margin-top:4px">${esc(APPROVAL_EXPLAIN[a.kind])}</div>` : ''}
+      ${(() => { const t = termsIn([a.title, a.reason, a.scope, a.expected_outcome, a.uncertainty].join(' '), 5); return t.length ? `<details class="x"><summary>Words used here</summary><dl class="facts">${t.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></details>` : ''; })()}</div>
     ${a.reason ? `<div><b>Why:</b> ${esc(a.reason)}</div>` : ''}
     <dl class="facts">
       <dt>Cost</dt><dd>${money(a.cost_usd, 2)}</dd>

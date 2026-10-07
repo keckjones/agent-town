@@ -130,6 +130,7 @@ function renderCtrl() {
     <select class="i sm" id="dept-nav" aria-label="Go to department"><option value="">Departments…</option>${F.DEPTS.map((d) => `<option value="${d.id}">${esc(d.name)}</option>`).join('')}</select>
     ${floor ? `<select class="i sm" id="cam-nav" aria-label="Saved views"><option value="">Saved views…</option>${cams.map((c, i) => `<option value="${i}">${esc(c.name)}</option>`).join('')}<option value="save">＋ Save this view</option>${cams.length ? '<option value="clear">Clear saved views</option>' : ''}</select>
     <button class="btn sm ${prefs.fixedCam ? 'primary' : ''}" data-act="fixed-cam" title="Lock the camera (no drag or zoom)">${prefs.fixedCam ? 'Camera locked' : 'Lock camera'}</button>` : ''}
+    ${floor ? `<button class="btn sm ${prefs.ambient !== false ? 'primary' : ''}" data-act="ambient" title="Idle agents sometimes take a coffee or water break. Their tag always says Idle.">${prefs.ambient !== false ? 'Breaks: on' : 'Breaks: off'}</button>` : ''}
     <button class="btn sm" data-act="sound" title="Sound alerts for new approvals and failures">${prefs.sound ? '🔔 Sound on' : '🔕 Sound off'}</button>
     <select class="i sm" id="quality" aria-label="Graphics quality"><option value="full" ${prefs.mode === 'full' || !prefs.mode ? 'selected' : ''}>3D: full</option><option value="low" ${prefs.mode === 'low' ? 'selected' : ''}>3D: simplified</option><option value="off" ${prefs.mode === 'off' ? 'selected' : ''}>2D cards</option></select>`;
   $('#legend').innerHTML = Object.values(F.STATUS).map((s) => `<span style="--c:${s.color}">${s.icon} ${s.label}</span>`).join('');
@@ -187,7 +188,8 @@ function floorData() {
     if (!firstFloorUpdate || Date.now() - new Date(h.at) < 120000) fresh.push(h);
   }
   firstFloorUpdate = false;
-  return { desks: c.desks, workload: c.workload, walls: wallData(c), exec: execScreens(c), newHandoffs: fresh, recentHandoffs: all.filter((h) => Date.now() - new Date(h.at) < 864e5) };
+  const tick = F.ticker(S, { priority: 'important' }, 14).map((e) => `${e.deptName.toUpperCase()} · ${e.agentName}: ${e.text}\u241f${e.level === 'error' ? '#ff7b7b' : e.level === 'warn' ? '#f2c14e' : e.level === 'success' ? '#7be0a8' : '#cfe0ff'}`).join('\u241e');
+  return { desks: c.desks, workload: c.workload, walls: wallData(c), exec: execScreens(c), newHandoffs: fresh, recentHandoffs: all.filter((h) => Date.now() - new Date(h.at) < 864e5), tickerText: (S.demo ? 'DEMO DATA\u241f#f2c14e\u241e' : '') + tick };
 }
 
 function renderFlat() {
@@ -218,7 +220,7 @@ async function startFloor() {
   try {
     const mod = await import('./floor.js');
     if (!mod.webglAvailable()) { useFlat('WebGL is not available on this device, so department cards are shown.'); renderCtrl(); return; }
-    floor = mod.createFloor({ canvas: $('#floor'), labelsEl: $('#labels'), quality: mode, reducedMotion: !!reduced, fixed: !!prefs.fixedCam,
+    floor = mod.createFloor({ canvas: $('#floor'), labelsEl: $('#labels'), quality: mode, reducedMotion: !!reduced, fixed: !!prefs.fixedCam, ambient: prefs.ambient !== false,
       on: { agent: (id) => openDesk(id), dept: (id) => go(stationForDept(id)), wall: (id) => go('wall', { sub: { wall: id } }), exec: () => go('overview'), ref: (r) => openRef(r) } });
     floor.update(floorData());
     window.__floor = floor;
@@ -580,6 +582,7 @@ const ACTIONS = {
   mode: (d) => { prefs.mode = d.id; savePrefs(); startFloor(); toast(`Display: ${d.id === 'off' ? '2D cards' : d.id}`); },
   motion: () => { prefs.reduced = !(prefs.reduced ?? window.matchMedia('(prefers-reduced-motion: reduce)').matches); savePrefs(); startFloor(); toast(prefs.reduced ? 'Reduced motion on' : 'Reduced motion off'); },
   'fixed-cam': () => { prefs.fixedCam = !prefs.fixedCam; savePrefs(); floor?.setFixed(prefs.fixedCam); renderCtrl(); },
+  ambient: () => { prefs.ambient = prefs.ambient === false; savePrefs(); floor?.setAmbient(prefs.ambient !== false); renderCtrl(); },
   sound: () => { prefs.sound = !prefs.sound; savePrefs(); renderCtrl(); if (prefs.sound) beep('approval'); },
   'tick-reset': () => { prefs.tick = {}; savePrefs(); renderTape(); renderTapeMenu(); },
   'replay-intro': () => { prefs.introSeen = false; savePrefs(); prefs.mode = prefs.mode === 'off' ? 'full' : prefs.mode; startFloor(); },

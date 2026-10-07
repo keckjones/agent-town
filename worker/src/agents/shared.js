@@ -1,6 +1,7 @@
 // Shared continuous-improvement agents: Experiment Design, Performance Learning, Capital Allocation,
 // Risk & Quality, Workflow Improvement. None of them can change approval rules, permissions, limits, or success metrics.
 import { db, must, say, requestApproval, addDocument, setIntegration } from '../lib/db.js';
+import { PLAIN_ENGLISH } from '../lib/explain.js';
 import { askJSON } from '../lib/claude.js';
 import { runOnce } from '../lib/actions.js';
 import { shopify, shopifyReady } from '../lib/shopify.js';
@@ -135,7 +136,8 @@ Return JSON {"allocations": [{"division": "...", "usd": n, "why": "..."}], "hold
     const { data: ords } = await db.from('orders').select('division, status, amount_usd, cost_usd, data').gte('created_at', since(30));
     const r = await askJSON({
       agentId: 'learning', maxTokens: 2500,
-      system: `You analyze what produces COLLECTED revenue and contribution profit. Be honest about small samples (say "too early to tell" under ~20 events).
+      system: `${PLAIN_ENGLISH}
+You analyze what produces COLLECTED revenue and contribution profit. Be honest about small samples (say "too early to tell" under ~20 events).
 Account for refunds, delayed costs and incomplete real estate deals. Recommend changes with the evidence behind them. You cannot change rules or metrics.`,
       prompt: `Ledger (30d): ${JSON.stringify(led).slice(0, 6000)}\nOutreach (30d): ${JSON.stringify(out).slice(0, 3000)}\nAgency outcomes: ${JSON.stringify(won).slice(0, 3000)}
 Experiments: ${JSON.stringify(exps).slice(0, 3000)}\nOrders (30d): ${JSON.stringify(ords).slice(0, 4000)}

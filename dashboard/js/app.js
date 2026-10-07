@@ -116,7 +116,15 @@ function migrationsNeeded() {
 }
 function renderMigrate() {
   const need = migrationsNeeded();
-  const el = $('#migrate'); el.hidden = !need.length;
+  const el = $('#migrate');
+  const gm = S.t('integrations').find((i) => i.id === 'gmail');
+  const pub = S.t('integrations').find((i) => i.id === 'public_url' && i.status === 'connected')?.detail;
+  if (!need.length && gm?.status === 'error' && /expired|revoked|Connect Gmail/i.test(gm.detail || '')) {
+    el.hidden = false;
+    el.innerHTML = `<b>Email is paused:</b> ${esc(gm.detail)} ${pub ? `<a href="${esc(pub.replace(/\/$/, ''))}/oauth/gmail/start" target="_blank" rel="noopener">Reconnect Gmail →</a>` : ''} <span class="faint">(While the Google app is in Testing mode, Google asks for this about once a week. Approved emails wait and send after you reconnect.)</span>`;
+    return;
+  }
+  el.hidden = !need.length;
   if (need.length) el.innerHTML = `<b>Database update needed.</b> In Supabase → SQL Editor, run ${need.map((f) => `<a href="https://github.com/keckjones/agent-town/blob/main/supabase/${f}" target="_blank" rel="noopener">${f}</a>`).join(', then ')} (in that order). ${need.includes('002_command_center.sql') ? 'Approved items will not send until 002 is run.' : ''}`;
 }
 

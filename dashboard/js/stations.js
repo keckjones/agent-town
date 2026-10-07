@@ -4,6 +4,7 @@ export const STATIONS = [
   { id: 'approvals',  key: '2', name: 'Approvals & Alerts',        short: 'Approvals',  accent: '#f2c14e', division: null },
   { id: 'monitor',    key: 'g', name: 'All Agents',                short: 'Agents',     accent: '#f2c14e', division: null },
   { id: 'team',       key: 'j', name: 'Projects & Requests',       short: 'Projects',   accent: '#f2c14e', division: null },
+  { id: 'links',      key: 'l', name: 'Live Links & Analytics',    short: 'Live Links', accent: '#7be0a8', division: null },
   { id: 'timeline',   key: 't', name: "Today's Timeline",          short: 'Timeline',   accent: '#5fd0e6', division: null },
   { id: 'agency',     key: '3', name: 'Local Website Agency',      short: 'Agency',     accent: '#3aa0ff', division: 'agency', dept: 'agency' },
   { id: 'sports',     key: '4', name: 'Sports Platform Marketing', short: 'Sports',     accent: '#ff4f6d', division: 'sports', dept: 'sports' },

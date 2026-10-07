@@ -260,9 +260,13 @@ export async function launchDropshipProduct(a) {
     const { result } = await runOnce(`shopify:product:${p.id}`, 'shopify_product', async () => {
       const j = await shopify('/products.json', { method: 'POST', json: { product: { title: pl.listing.title, body_html: pl.listing.body_html, tags: (pl.listing.tags || []).join(', '),
         status: 'active', variants: [{ price: String(pl.price_usd), inventory_management: null }] } } });
-      return { id: String(j.product.id) };
+      return { id: String(j.product.id), handle: j.product.handle || null };
     });
     storeId = result.id;
+    if (result.handle) {
+      const { recordLink } = await import('../lib/links.js');
+      await recordLink({ url: `https://${String(process.env.SHOPIFY_STORE || '').replace(/^https?:\/\//, '').replace(/\/$/, '')}/products/${result.handle}`, title: pl.listing.title, kind: 'store_product', platform: 'shopify', whereItLives: 'Your Shopify store', sourceType: 'ds_product', sourceId: p.id, createdBy: 'ds_store' });
+    }
   }
   await db.from('ds_products').update({ store_product_id: storeId, stage: shopifyReady() ? 'listed' : 'approval', updated_at: new Date().toISOString() }).eq('id', p.id);
   const wf = await findWorkflow('ds_product', p.id, 'ds_product');

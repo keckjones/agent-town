@@ -45,6 +45,10 @@ export async function youtubeCallback(params) {
     profile_url: `https://www.youtube.com/channel/${c.id}`, verified_at: new Date().toISOString(), token_expires_at: null,
     permissions: { scopes: (t.scope || '').split(' ') }, health: { ok: true, subscribers: Number(c.statistics?.subscriberCount || 0), checked_at: new Date().toISOString() },
     updated_at: new Date().toISOString() }).eq('id', pending.account_id);
+  const { data: acc } = await db.from('brand_accounts').select('brand_id').eq('id', pending.account_id).single();
+  const { recordLink } = await import('./links.js');
+  await recordLink({ url: `https://www.youtube.com/channel/${c.id}`, title: c.snippet?.title || 'YouTube channel', kind: 'account', platform: 'youtube', whereItLives: 'YouTube',
+    sourceType: 'brand_account', sourceId: pending.account_id, brandId: acc?.brand_id, createdBy: 'account_prov' });
   return { ok: true, message: `Connected "${c.snippet?.title}". You can close this tab.` };
 }
 

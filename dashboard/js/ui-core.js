@@ -101,6 +101,8 @@ export function approvalCard(a, S) {
       <button class="btn danger" data-act="reject" data-id="${a.id}">Reject</button>
       ${a.workflow_id ? `<button class="btn ghost" data-act="pause-wf" data-id="${a.workflow_id}">Pause workflow</button>` : ''}
     </div>` : ''}
+    ${a.status === 'executed' && (a.result?.url || p.url) ? `<div class="row"><a class="btn sm gold" href="${esc(a.result?.url || p.url)}" target="_blank" rel="noopener">Open the live link ↗</a><span class="meta">${esc(a.result?.url || p.url)}</span></div>` : ''}
+    ${a.status === 'executed' && ['social_post', 'content'].includes(a.kind) && a.result?.manual !== false ? `<div class="meta">Posted it yourself? Add the link in <button class="lnk" data-act="goto" data-id="links">Live Links</button> so its numbers are tracked.</div>` : ''}
     ${a.status === 'executed' && (p.text || p.body) && a.result?.manual ? `<button class="btn sm" data-act="copy" data-text="${esc(p.text || p.body)}">Copy text</button>` : ''}
   </article>`;
 }

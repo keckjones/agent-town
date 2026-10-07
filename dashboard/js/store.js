@@ -53,6 +53,8 @@ const TABLES = {
   team_projects: { order: ['created_at', false], limit: 50 },
   work_requests: { order: ['created_at', false], limit: 200 },
   sites: { order: ['created_at', false], limit: 100 },
+  published_links: { order: ['created_at', false], limit: 500 },
+  site_visits: { order: ['day', false], limit: 2000 },
 };
 
 export function createLiveStore(sb) {

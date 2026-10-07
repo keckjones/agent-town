@@ -3,6 +3,7 @@
 // Digital products are produced here (PDF + mockup). Print-on-demand needs an approved sample before it can list.
 // Listings follow Etsy's creativity standards: AI-assisted designs are disclosed; production partners are disclosed.
 import { config } from '../config.js';
+import { recordLink } from '../lib/links.js';
 import { PLAIN_ENGLISH } from '../lib/explain.js';
 import { db, must, say, enqueue, upload, download, requestApproval, addLedger } from '../lib/db.js';
 import { askJSON, ask } from '../lib/claude.js';
@@ -151,5 +152,6 @@ export async function publishProduct(productId, approved) {
   const wf = await findWorkflow('product', prod.id, 'etsy_product');
   await advance(wf?.id, 'merchant', { stage: 'listed', status: 'active', nextAction: 'Watch for orders; Etsy delivers the file automatically' });
   await say('merchant', `Listed on Etsy: ${listing.title.slice(0, 60)}`, 'success');
+  await recordLink({ url: result.url || `https://www.etsy.com/listing/${id}`, title: listing.title, kind: 'listing', platform: 'etsy', whereItLives: 'Your Etsy shop', sourceType: 'product', sourceId: prod.id, createdBy: 'merchant' });
   return { listing_id: id, url: result.url };
 }

@@ -69,7 +69,7 @@ export async function metricsForDay(ymd, tz) {
 
   return {
     ymd, revenue, refunds, ads, fulfillment, fees, software, ai, profitEst, hasLedger: (led || []).length > 0,
-    newLeads, replies, closed, etsyOrders, etsyExceptions, approvals, blocked, failedTasks, intErrors,
+    newLeads, replies, closed, etsyOrders, etsyExceptions, approvals, blocked, failedTasks, intErrors, links: await linkDigest(),
     calls: { total: (calls || []).length, connected: (calls || []).filter((c) => !['no_answer', 'voicemail', 'wrong_number'].includes(c.outcome)).length,
       meetings: outcome('meeting_booked'), signed: outcome('agreement_signed'), qualified: outcome('interested') + outcome('proposal_requested') },
     sports: snap?.[0] ? { record: snap[0].official_stats?.ALL?.record, units: snap[0].official_stats?.ALL?.units, stale: snap[0].stale, posted: posted || 0 } : null,
@@ -96,6 +96,8 @@ export function digestText(m, dashboardUrl) {
     m.media && (m.media.published || m.media.blocked || m.media.inProduction) ? `Content: ${m.media.published} published, ${m.media.inProduction} in production${m.media.blocked ? `, ${m.media.blocked} BLOCKED` : ''}${m.media.views ? `, ${m.media.views.toLocaleString()} views (YouTube)` : ''}` : null,
     m.media?.validated ? `Brands meeting criteria: ${m.media.validated} (promotion needs your approval)` : null,
     m.bestOpportunity ? `Top idea: ${m.bestOpportunity}` : null,
+    m.links?.newCount ? `New live: ${m.links.newCount} (${m.links.newest}). See Live Links.` : null,
+    m.links?.views7 ? `Your pages: ${m.links.views7} views, ${m.links.clicks7} clicks (7d)` : null,
     `Needs you: ${m.approvals} approvals${m.blocked ? `, ${m.blocked} blocked` : ''}${m.failedTasks ? `, ${m.failedTasks} failed jobs` : ''}${m.intErrors ? `, ${m.intErrors} integration errors` : ''}`,
     dashboardUrl || null,
   ];
@@ -188,3 +190,13 @@ export const handlers = {
   async daily_rollup() { await rollupAiCost(); return { ok: true }; },
 };
 
+
+/** New live links in the last day and 7-day traffic on our own pages (for the morning text). */
+async function linkDigest() {
+  const since = new Date(Date.now() - 864e5).toISOString();
+  const { data: fresh, error } = await db.from('published_links').select('title').gte('created_at', since).eq('status', 'live');
+  if (error) return null;
+  const { data: pages } = await db.from('published_links').select('metrics').eq('kind', 'page').eq('status', 'live');
+  return { newCount: (fresh || []).length, newest: (fresh || [])[0]?.title?.slice(0, 40) || '',
+    views7: (pages || []).reduce((s, p) => s + Number(p.metrics?.views_7d || 0), 0), clicks7: (pages || []).reduce((s, p) => s + Number(p.metrics?.clicks_7d || 0), 0) };
+}

@@ -4,6 +4,7 @@
 //   → publishing (fixed brand + destination account, exactly once) → measurement → CEO promotion only after verified success.
 // Rules: no fake identities, bought followers, fake engagement, or unlicensed media. Account creation is always an owner task.
 import crypto from 'node:crypto';
+import { recordLink } from '../lib/links.js';
 import { requestWork } from '../lib/collab.js';
 import { PLAIN_ENGLISH } from '../lib/explain.js';
 import { config } from '../config.js';
@@ -452,6 +453,9 @@ async function publishItem(it, acct, visibility) {
       metrics: { privacy: info?.status?.privacyStatus || result.privacy, upload: info?.status?.uploadStatus || result.status } }).eq('id', it.id);
     await advance(wf?.id, 'publisher', { stage: 'published', status: 'done', nextAction: 'Measure results', note: `Published: ${result.url}${info?.status?.privacyStatus && info.status.privacyStatus !== visibility ? ` (YouTube set it ${info.status.privacyStatus}: unverified API apps upload as private until Google verifies the app)` : ''}` });
     await say('publisher', `Published "${it.title}" to ${acct.handle || 'YouTube'}.`, 'success');
+    const br = (await db.from('brands').select('name').eq('id', it.brand_id).maybeSingle()).data;
+    await recordLink({ url: result.url, title: it.title, kind: 'video', platform: 'youtube', whereItLives: `YouTube channel ${acct.handle || ''}${br ? ` (${br.name})` : ''}`.trim(),
+      sourceType: 'content', sourceId: it.id, brandId: it.brand_id, createdBy: 'publisher' });
     return;
   }
   await db.from('content_items').update({ stage: 'scheduled', status: 'manual_publish' }).eq('id', it.id);

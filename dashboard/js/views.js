@@ -180,7 +180,7 @@ export function recordPanel(S, ui, ctx) {
     const e = find('events'); if (!e) return back + missing;
     const near = S.t('workflow_events').filter((w) => w.agent_id === e.agent_id && Math.abs(ms(w.created_at) - ms(e.created_at)) < 3 * 60000);
     return [back, `<div class="card"><div class="row between"><b>${esc(agentName(S, e.agent_id))}</b>${chip(e.level, e.level === 'error' ? 'bad' : e.level === 'warn' ? 'warn' : e.level === 'success' ? 'ok' : '')}</div>
-      <p>${esc(e.message)}</p><div class="meta">${ct(e.created_at)} · event #${e.id} · ${esc(F.eventKind(e))}</div>
+      <p>${esc(e.message)}</p>${e.data?.url ? `<a class="btn sm gold" href="${esc(e.data.url)}" target="_blank" rel="noopener">Open the live link ↗</a>` : ''}<div class="meta">${ct(e.created_at)} · event #${e.id} · ${esc(F.eventKind(e))}</div>
       ${e.data ? `<details class="x"><summary>Data</summary><div class="pre">${esc(JSON.stringify(e.data, null, 2))}</div></details>` : ''}
       <div class="row">${refBtn(`agent:${e.agent_id}`, 'Open desk', 'btn sm')}${near.map((w) => refBtn(`workflow:${w.workflow_id}`, `Workflow #${w.workflow_id}`, 'btn sm')).filter((v, i, a) => a.indexOf(v) === i).join('')}</div></div>`].join('');
   }
@@ -255,6 +255,61 @@ export function teamPanel(S, ui, ctx) {
     }).join('') : '<p class="muted">No projects yet. Give the Big Boss an idea above.</p>'),
     section(`Other team requests (${loose.length})`, loose.length ? `<div class="reqs">${loose.slice(0, 30).map((r) => requestRow(S, r)).join('')}</div>` : '<p class="muted">None yet. Agents create these when they need something from each other (for example, a new brand asks for its link-in-bio page).</p>'),
     section('Pages the team has built', S.t('sites').length ? S.t('sites').map((x) => `<div class="req"><div class="row between"><b>${esc(x.title)}</b>${chip(x.status, x.status === 'published' ? 'ok' : 'warn')}</div>${x.preview_path ? `<img class="thumb" style="max-width:220px" data-path="${esc(x.preview_path)}" alt="Preview of ${esc(x.title)}">` : ''}</div>`).join('') : '<p class="muted">None yet.</p>'),
+  ].join('');
+}
+
+// ------------------------------------------------------------------ Live Links & Analytics: everything the team put online, with numbers
+const PLATFORM = { web: '🌐 Website', youtube: '▶ YouTube', instagram: '◎ Instagram', tiktok: '♪ TikTok', facebook: 'f Facebook', x: '𝕏 X', etsy: 'Etsy', shopify: 'Shopify store', other: 'Link' };
+const KIND = { page: 'Web page', video: 'Video', post: 'Post', listing: 'Product listing', store_product: 'Store product', account: 'Account / page' };
+const fmt = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString('en-US'));
+function spark(daily) {
+  if (!daily?.length) return '';
+  const max = Math.max(1, ...daily.map((d) => d[1]));
+  const w = 140, h = 28, bw = w / daily.length;
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Views per day, last 14 days">${daily.map(([day, v], i) => `<rect x="${i * bw + 1}" y="${h - (v / max) * (h - 2)}" width="${bw - 2}" height="${(v / max) * (h - 2)}" fill="#7be0a8"><title>${day}: ${v} views</title></rect>`).join('')}</svg>`;
+}
+function linkMetrics(l) {
+  const m = l.metrics || {};
+  const cells = [];
+  if (l.kind === 'page') cells.push(['Views (7d)', m.views_7d], ['Visitors (7d)', m.visitors_7d], ['Clicks (7d)', m.clicks_7d], ['Views (all time)', m.views_total]);
+  else if (l.kind === 'video') cells.push(['Views', m.views], ['Likes', m.likes], ['Comments', m.comments], ['Views gained (7d)', m.views_7d_change]);
+  else if (l.kind === 'account') cells.push(['Followers', m.followers], ['Total views', m.views], ...(m.videos != null ? [['Videos', m.videos]] : []), ...(m.likes != null ? [['Likes', m.likes]] : []));
+  else if (l.kind === 'listing' || l.kind === 'store_product') cells.push(['Views', m.views], ['Favorites', m.favorites], ['Orders', m.orders], ['Revenue', m.revenue_usd != null ? M.money(m.revenue_usd, 2) : null]);
+  else cells.push(['Views', m.views], ['Likes', m.likes], ['Clicks', m.clicks], ['Followers', m.followers]);
+  const shown = cells.filter(([, v]) => v != null);
+  return `<div class="lm">${shown.length ? shown.map(([k, v]) => `<div><b>${typeof v === 'string' ? esc(v) : fmt(v)}</b><span>${esc(k)}</span></div>`).join('') : '<span class="muted">No numbers yet.</span>'}${l.kind === 'page' ? spark(m.daily) : ''}</div>
+    <div class="meta">${m.error ? `<span class="down">Couldn't refresh: ${esc(m.error)}</span> · ` : ''}${m.source ? `Source: ${esc(m.source)}` : ''}${l.metrics_updated_at ? ` · updated ${ago(l.metrics_updated_at)}` : ''}${m.top_referrers?.length ? ` · from: ${m.top_referrers.map(([h, c]) => `${esc(h)} (${c})`).join(', ')}` : ''}</div>`;
+}
+export function linksPanel(S, ui, ctx) {
+  const all = S.t('published_links');
+  const live = all.filter((l) => l.status === 'live');
+  const f = ui.filter || '';
+  const shown = all.filter((l) => !f || (f === 'removed' ? l.status === 'removed' : l.kind === f && l.status === 'live'));
+  const sumM = (k, rows) => rows.reduce((s, l) => s + Number(l.metrics?.[k] || 0), 0);
+  const pages = live.filter((l) => l.kind === 'page');
+  const brands = Object.fromEntries(S.t('brands').map((b) => [b.id, b.name]));
+  const groups = {};
+  for (const l of shown) (groups[l.brand_id ? `Brand: ${brands[l.brand_id] || l.brand_id}` : l.project_id ? `Project: ${S.t('team_projects').find((p) => p.id === l.project_id)?.title || l.project_id}` : 'KJ Agentic'] ||= []).push(l);
+  return [
+    `<div class="plain">Everything the team has put online, with a link to open it and where it lives. Numbers come straight from the source: our own visit counter for pages we host, YouTube for videos and channels, Etsy and Shopify for listings and sales. For accounts we can't read automatically (for example Instagram or TikTok without a connection), you type in the numbers and it keeps the history.</div>`,
+    `<div class="kpis">${kpi('Live links', live.length)}${kpi('Page views (7d)', fmt(sumM('views_7d', pages)), 'actual')}${kpi('Page clicks (7d)', fmt(sumM('clicks_7d', pages)), 'actual')}${kpi('Video views', fmt(sumM('views', live.filter((l) => l.kind === 'video'))), 'actual')}${kpi('Followers', fmt(sumM('followers', live.filter((l) => l.kind === 'account'))), 'actual')}${kpi('Orders from listings', fmt(sumM('orders', live.filter((l) => ['listing', 'store_product'].includes(l.kind)))), 'actual')}</div>`,
+    `<div class="row"><button class="btn primary sm" data-act="refresh-links">Refresh numbers now</button>${['', 'page', 'video', 'post', 'account', 'listing', 'store_product', 'removed'].map((k) => `<button class="btn sm ${f === k ? 'primary' : ''}" data-act="filter" data-id="${k}">${k ? (k === 'removed' ? 'Taken down' : KIND[k]) : 'All'}</button>`).join('')}</div>`,
+    ...Object.entries(groups).map(([g, rows]) => section(`${g} (${rows.length})`, rows.map((l) => `<div class="card linkcard ${l.status === 'removed' ? 'faint' : ''}">
+      <div class="row between"><div><b>${esc(l.title)}</b><div class="meta">${esc(PLATFORM[l.platform] || l.platform)} · ${esc(KIND[l.kind] || l.kind)} · lives at: ${esc(l.where_it_lives || l.platform)} · live since ${ct(l.created_at)}${l.created_by ? ` · by ${esc(l.created_by === 'owner' ? 'you' : agentName(S, l.created_by))}` : ''}</div></div>
+        <a class="btn sm gold" href="${esc(l.url)}" target="_blank" rel="noopener">Open ↗</a></div>
+      <div class="meta url">${esc(l.url)}</div>
+      ${linkMetrics(l)}
+      ${l.analytics === 'manual' ? `<details class="x"><summary>Update its numbers (from the app's insights)</summary><form data-form="link-metrics" data-id="${l.id}" class="grid2">${['followers', 'views', 'likes', 'clicks'].map((k) => `<label class="f">${k}<input class="i" type="number" min="0" id="lm-${k}-${l.id}" value="${l.metrics?.[k] ?? ''}"></label>`).join('')}<button class="btn sm primary">Save</button></form>${(l.metrics?.history || []).length > 1 ? `<div class="meta">History: ${l.metrics.history.slice(-6).map((h) => `${h.on}: ${fmt(h.views)} views / ${fmt(h.followers)} followers`).join(' · ')}</div>` : ''}</details>` : ''}
+      <div class="row">${l.status === 'live' ? `<button class="btn sm ghost" data-act="link-status" data-id="${l.id}" data-status="removed">Mark as taken down</button>` : `<button class="btn sm ghost" data-act="link-status" data-id="${l.id}" data-status="live">Mark live again</button>`}</div>
+    </div>`).join(''))),
+    shown.length ? '' : '<p class="muted">Nothing here yet. When the team publishes a page, video, listing or account, it appears here automatically with its link and numbers.</p>',
+    section('Add something you posted yourself', `<form data-form="add-link" class="grid2">
+      <label class="f">Link<input class="i" id="al-url" type="url" required placeholder="https://www.instagram.com/p/…"></label>
+      <label class="f">What is it?<input class="i" id="al-title" placeholder="e.g. Launch post for taco catering"></label>
+      <label class="f">Type<select class="i" id="al-kind">${Object.entries(KIND).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+      <label class="f">Platform<select class="i" id="al-platform">${Object.entries(PLATFORM).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+      <label class="f">Where it lives (account)<input class="i" id="al-where" placeholder="@deskfixdaily on Instagram"></label>
+      <div class="row" style="align-items:end"><button class="btn primary">Add link</button></div></form>`),
   ].join('');
 }
 
@@ -472,4 +527,5 @@ export const VIEWS = {
   'mode-health': { name: () => 'System Health', accent: '#8592a5', render: healthPanel },
   media: { name: () => 'Content Studio', accent: '#ff8bd1', render: contentPanel },
   team: { name: () => 'Projects & Team Requests', accent: '#f2c14e', render: teamPanel },
+  links: { name: () => 'Live Links & Analytics', accent: '#7be0a8', render: linksPanel },
 };

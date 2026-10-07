@@ -20,6 +20,7 @@ import { shopifyReady } from './lib/shopify.js';
 import { youtubeConnectUrl } from './lib/youtube.js';
 import { askBoss } from './lib/boss.js';
 import { routeWork, onRequestTask, planIdea } from './lib/collab.js';
+import { refreshLinkMetrics } from './lib/links.js';
 import { gmailConnectUrl, refreshGmailState } from './lib/gmail.js';
 import { logEvent } from './lib/workflows.js';
 
@@ -197,6 +198,7 @@ async function processCommands() {
       else if (c.kind === 'retry_task') result = await retryTask(Number(c.input?.task_id));
       else if (c.kind === 'reassign_workflow') result = await reassignWorkflow(Number(c.input?.workflow_id), String(c.input?.to || ''));
       else if (c.kind === 'ask_boss') result = await askBoss(c.input?.question);
+      else if (c.kind === 'refresh_links') result = await refreshLinkMetrics();
       else if (c.kind === 'plan_idea') { result = await planIdea({ input: { project_id: Number(c.input?.project_id) } }); }
       else if (c.kind === 'gmail_connect') result = { url: await gmailConnectUrl() };
       else if (c.kind === 'youtube_connect') result = { url: await youtubeConnectUrl(Number(c.input.account_id)) };
@@ -271,7 +273,8 @@ async function main() {
   every('15 6 * * 1', 'capital', once('capital', 'allocation_report', {}, 6));
   every('30 6 * * 1', 'bottlenecks', once('improve', 'find_bottlenecks', {}, 7));
   every('*/10 * * * *', 'publishing', once('publisher', 'publish_due', {}, 3));
-  every('40 7 * * *', 'content metrics', once('growth', 'measure', {}, 6));
+  every('30 * * * *', 'content metrics', once('growth', 'measure', {}, 6));
+  every('35 * * * *', 'link analytics', refreshLinkMetrics);   // hourly numbers for everything that's live
   every('25 * * * *', 'comments', once('community', 'check_comments', {}, 6));
   every('5 */6 * * *', 'accounts', once('account_prov', 'check_accounts', {}, 6));
   every('45 6 * * 1', 'brand evaluation', once('growth', 'evaluate_brands', {}, 6));

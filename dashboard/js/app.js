@@ -83,7 +83,7 @@ function renderRail() {
     const badge = id === 'approvals' && need ? `<span class="badge">${need}</span>` : id === 'monitor' && blocked ? `<span class="badge red">${blocked}</span>`
       : s.division && paused.has(s.division) ? '<span class="chip warn">paused</span>' : w?.blocked ? `<span class="badge red">${w.blocked}</span>` : w?.working ? `<span class="wk">▶${w.working}</span>` : s.key ? `<span class="key">${s.key.toUpperCase()}</span>` : '';
     return `<button class="station-btn" data-act="goto" data-id="${id}" style="--accent:${s.accent}" aria-current="${ui.station === id}"><span class="glyph"></span><span>${esc(s.name)}</span>${badge}</button>`; }).join('')}`;
-  $('#rail').innerHTML = group('Command', ['overview', 'team', 'approvals', 'monitor', 'timeline']) + group('Businesses', ['agency', 'sports', 'etsy', 'dropship', 'realestate', 'media']) + group('Operations', ['ventures', 'customers', 'finance', 'hq', 'setup']);
+  $('#rail').innerHTML = group('Command', ['overview', 'team', 'links', 'approvals', 'monitor', 'timeline']) + group('Businesses', ['agency', 'sports', 'etsy', 'dropship', 'realestate', 'media']) + group('Operations', ['ventures', 'customers', 'finance', 'hq', 'setup']);
 }
 
 function renderTop() {
@@ -114,6 +114,7 @@ function migrationsNeeded() {
   if (dv && !('paused_at' in dv)) out.push('005_trading_floor.sql');
   if (ap && !('explain' in ap)) out.push('006_plain_english.sql');
   if (S.missing.has('work_requests')) out.push('007_collaboration.sql');
+  if (S.missing.has('published_links')) out.push('009_links_analytics.sql');
   return out;
 }
 function renderMigrate() {
@@ -543,6 +544,8 @@ const ACTIONS = {
     if (a.type === 'start_project') { const p = await S.insert('team_projects', { title: String(a.idea || '').slice(0, 80), idea: String(a.idea || ''), source: 'owner' }); await S.command('plan_idea', { project_id: p.id }); if (!S.demo) toast('The Big Boss is planning it now (usually 10–20 seconds).'); go('team'); return; }
   },
   async 'check-integrations'() { await S.command('check_integrations'); if (!S.demo) toast('Re-checking connections'); },
+  async 'refresh-links'() { await S.command('refresh_links'); if (!S.demo) toast('Refreshing numbers from YouTube, Etsy and your pages…'); },
+  async 'link-status'(d) { await S.update('published_links', { id: Number(d.id) }, { status: d.status }); if (!S.demo) toast(d.status === 'removed' ? 'Marked as taken down' : 'Marked live'); },
   async 'gmail-connect'() { await S.command('gmail_connect'); if (!S.demo) toast('Preparing a Google sign-in link…'); },
   async 'retry-approval'(d) {
     if (inflight.has(`rappr:${d.id}`)) return; inflight.add(`rappr:${d.id}`);
@@ -651,6 +654,19 @@ const FORMS = {
     f.reset();
     if (!S.demo) toast('Got it. The Big Boss is planning it now (usually 10–20 seconds).');
     go('team');
+  },
+  async 'add-link'(f) {
+    const url = val('al-url', f); if (!/^https?:\/\//.test(url)) throw new Error('Paste the full link, starting with https://');
+    await S.insert('published_links', { url, title: val('al-title', f) || url, kind: val('al-kind', f), platform: val('al-platform', f), where_it_lives: val('al-where', f) || val('al-platform', f), analytics: 'manual', source_type: 'owner', created_by: 'owner' });
+    f.reset(); if (!S.demo) toast('Added. Enter its numbers any time to track performance.');
+  },
+  async 'link-metrics'(f) {
+    const id = Number(f.dataset.id); const l = S.t('published_links').find((x) => x.id === id);
+    const n = (k) => { const v = val(`lm-${k}-${id}`, f); return v === '' ? undefined : Number(v); };
+    const m = { ...(l?.metrics || {}), followers: n('followers'), views: n('views'), likes: n('likes'), clicks: n('clicks'), source: 'entered by you', entered_on: new Date().toISOString().slice(0, 10) };
+    const hist = [...(l?.metrics?.history || []), { on: m.entered_on, followers: m.followers, views: m.views, likes: m.likes, clicks: m.clicks }].slice(-30);
+    await S.update('published_links', { id }, { metrics: { ...m, history: hist }, metrics_updated_at: new Date().toISOString() });
+    if (!S.demo) toast('Numbers saved');
   },
   async 'ask-team'(f) {
     const need = val('team-need', f), title = val('team-title', f);

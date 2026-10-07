@@ -1,6 +1,7 @@
 // Small web server inside the worker, for things outside services need to call back:
 // SMS delivery receipts, payment webhooks, and the Etsy sign-in redirect. Every webhook is signature-checked.
 import { gmailCallback, gmailConnectUrl } from './lib/gmail.js';
+import { isBot, visitorHash, refHost, withClickTracking } from './lib/links.js';
 import http from 'node:http';
 import { config } from './config.js';
 import { validTwilioSignature, applySmsStatus } from './lib/sms.js';
@@ -35,11 +36,21 @@ export function startServer() {
       if (req.method === 'GET' && url.pathname === '/health') return send(res, 200, 'ok');
       // Landing pages the team built and you approved: <worker>/p/<slug>
       if (req.method === 'GET' && url.pathname.startsWith('/p/')) {
-        const slug = decodeURIComponent(url.pathname.slice(3)).replace(/\/$/, '');
-        const { data: site } = await db.from('sites').select('html_path, status').eq('slug', slug).maybeSingle();
+        const parts = decodeURIComponent(url.pathname.slice(3)).replace(/\/$/, '').split('/');
+        const slug = parts[0];
+        const { data: site } = await db.from('sites').select('id, html_path, status').eq('slug', slug).maybeSingle();
         if (!site || site.status !== 'published') return send(res, 404, page('Not found', 'This page is not published.'), 'text/html');
-        const html = await download(site.html_path);
-        return send(res, 200, html.toString('utf-8'), 'text/html');
+        const ua = String(req.headers['user-agent'] || '');
+        // Click on a link in the page: count it, then send the visitor on.
+        if (parts[1] === 'go') {
+          const to = url.searchParams.get('u') || '';
+          if (!/^(https?:|mailto:|tel:)/i.test(to)) return send(res, 400, 'bad link');
+          if (!isBot(ua)) await db.rpc('track_site_click', { p_site: site.id }).then(() => {}, () => {});
+          res.writeHead(302, { Location: to, 'Cache-Control': 'no-store' }); return res.end();
+        }
+        if (!isBot(ua)) await db.rpc('track_site_visit', { p_site: site.id, p_hash: visitorHash(req), p_ref: refHost(req) }).then(() => {}, () => {});
+        const html = (await download(site.html_path)).toString('utf-8');
+        return send(res, 200, withClickTracking(html, slug), 'text/html');
       }
       // Public About + Privacy pages (Google's sign-in screen links to these).
       if (req.method === 'GET' && ['/', '/about', '/about.html', '/privacy', '/privacy.html'].includes(url.pathname)) {

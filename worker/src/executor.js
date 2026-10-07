@@ -3,6 +3,7 @@
 //  - it hasn't expired, and the town isn't paused.
 // Every external action is keyed, so a retry can never send, charge, or publish twice.
 import { requestWork, startProject, finishProject } from './lib/collab.js';
+import { recordLink } from './lib/links.js';
 import { config } from './config.js';
 import { db, must, say, addLedger } from './lib/db.js';
 import { sendMail, legalFooter } from './lib/mailer.js';
@@ -140,7 +141,7 @@ const executors = {
       if (r?.workflow_id) await logEvent(r.workflow_id, 'designer', 'result', `Landing page live: ${a.payload.url}`);
       await finishProject(r?.project_id);
     }
-    await say('designer', `Landing page is live: ${a.payload.url}`, 'success');
+    await recordLink({ url: a.payload.url, title: site.title, kind: 'page', platform: 'web', whereItLives: 'Your website (hosted by the worker)', sourceType: 'site', sourceId: site.id, brandId: site.brand_id, projectId: site.project_id, createdBy: 'designer' });
     await finish(a.id, 'executed', { note: `Live at ${a.payload.url}`, url: a.payload.url });
   },
 

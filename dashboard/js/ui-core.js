@@ -137,6 +137,9 @@ export function gmailConnectBox(S) {
     : c && ['queued', 'running'].includes(c.status) && Date.now() - new Date(c.created_at) > 90000 ? `<span class="down meta">The worker hasn't picked this up after ${Math.round((Date.now() - new Date(c.created_at)) / 60000) || 1} min. Check the worker light at the top: if it's red, the worker is down (Railway → your service → Deployments → View logs, and send me the last red lines). If it's green, click Connect Gmail again.</span>`
     : c && ['queued', 'running'].includes(c.status) ? '<span class="meta">Preparing the sign-in link… (up to a minute)</span>'
     : c?.status === 'failed' ? `<span class="down meta">${esc(c.result?.error || 'Could not prepare the link')}</span>` : '';
+  // Preferred: a direct link to the worker's sign-in page (opens Google immediately, no waiting).
+  const pub = S.t('integrations').find((i) => i.id === 'public_url' && i.status === 'connected')?.detail;
+  if (pub && /^https?:\/\//.test(pub)) return `<div class="row"><a class="btn sm gold" href="${esc(pub.replace(/\/$/, ''))}/oauth/gmail/start" target="_blank" rel="noopener">Connect Gmail →</a><span class="meta">Opens Google in a new tab. Sign in as agentickj@gmail.com and allow “Send email”. If the tab shows an error, that message says what's missing.</span></div>`;
   return `<div class="row"><button class="btn sm gold" data-act="gmail-connect">Connect Gmail</button>${link}</div>`;
 }
 

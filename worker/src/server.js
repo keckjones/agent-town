@@ -1,6 +1,6 @@
 // Small web server inside the worker, for things outside services need to call back:
 // SMS delivery receipts, payment webhooks, and the Etsy sign-in redirect. Every webhook is signature-checked.
-import { gmailCallback } from './lib/gmail.js';
+import { gmailCallback, gmailConnectUrl } from './lib/gmail.js';
 import http from 'node:http';
 import { config } from './config.js';
 import { validTwilioSignature, applySmsStatus } from './lib/sms.js';
@@ -81,6 +81,12 @@ export function startServer() {
         return send(res, r.ok ? 200 : 400, page(r.ok ? 'YouTube connected' : 'YouTube not connected', r.message), 'text/html');
       }
 
+      // Direct sign-in start: the dashboard links here, so connecting Gmail doesn't depend on the command queue.
+      // Safe to expose: the callback only accepts the business address (agentickj@gmail.com).
+      if (req.method === 'GET' && url.pathname === '/oauth/gmail/start') {
+        try { const location = await gmailConnectUrl(); res.writeHead(302, { Location: location }); return res.end(); }
+        catch (e) { return send(res, 400, page('Gmail not ready', e.message), 'text/html'); }
+      }
       if (req.method === 'GET' && url.pathname === '/oauth/gmail/callback') {
         const r = await gmailCallback(url.searchParams);
         return send(res, r.ok ? 200 : 400, page(r.ok ? 'Gmail connected' : 'Gmail not connected', r.message), 'text/html');

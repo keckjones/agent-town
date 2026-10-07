@@ -80,7 +80,15 @@ export async function gmailSend(mail) {
   });
   const j = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(`Gmail ${res.status}: ${j.error?.message || 'send failed'}`);
+    const msg = j.error?.message || 'send failed';
+    // Setup problems (not the email's fault): wait with a clear fix instead of failing. Nothing was sent.
+    if (/has not been used|is disabled|SERVICE_DISABLED|accessNotConfigured/i.test(JSON.stringify(j))) {
+      throw retryable(new Error('Email not connected: the Gmail API is switched off in your Google Cloud project. In console.cloud.google.com (My First Project) search "Gmail API" → Enable. Wait 2 minutes; this email then sends automatically. Nothing was sent.'));
+    }
+    if (res.status === 401 || /insufficient|scope|invalid_grant|unauthorized/i.test(msg)) {
+      throw retryable(new Error('Email not connected: Google didn\'t give permission to send. Reconnect Gmail and tick "Send email on your behalf". Nothing was sent.'));
+    }
+    const err = new Error(`Gmail ${res.status}: ${msg}`);
     if (res.status >= 400 && res.status < 500) retryable(err);   // rejected: definitely not sent
     throw err;
   }

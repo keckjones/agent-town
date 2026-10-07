@@ -147,6 +147,8 @@ export async function runApprovals() {
   if (error) throw new Error(error.message);
   if ((data || []).length && data[0].payload_hash === undefined) {
     // The approval-safety columns don't exist yet: the database update (002_command_center.sql) hasn't been run.
+    if (Date.now() - (runApprovals.warned || 0) < 30 * 60000) return;
+    runApprovals.warned = Date.now();
     await say('manager', 'Approved items are waiting: run supabase/002_command_center.sql (and 003) in the Supabase SQL Editor, then they will send.', 'error');
     return;
   }

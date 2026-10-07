@@ -62,10 +62,35 @@ export async function addDocument(agentId, kind, title, body, data = null) {
   return must(await db.from('documents').insert({ agent_id: agentId, kind, title, body, data }).select().single());
 }
 
-export async function requestApproval({ agentId, kind, title, payload, preview = null, prospectId = null }) {
+/**
+ * Ask the owner for a decision. Every card says what, why, evidence, cost, exposure, scope, and reversibility.
+ * Set standing=true for a campaign / policy approval that authorizes many routine actions inside its limits.
+ */
+export async function requestApproval({
+  agentId, kind, title, payload, preview = null, prospectId = null, workflowId = null, division = null,
+  reason = null, evidence = null, costUsd = 0, maxExposureUsd = 0, expectedOutcome = null, uncertainty = null,
+  scope = null, reversible = true, expiresInHours = null, standing = false,
+}) {
   return must(await db.from('approvals').insert({
-    agent_id: agentId, kind, title, payload, preview, prospect_id: prospectId,
+    agent_id: agentId, kind, title, payload, preview, prospect_id: prospectId, workflow_id: workflowId, division,
+    reason, evidence, cost_usd: costUsd, max_exposure_usd: maxExposureUsd, expected_outcome: expectedOutcome,
+    uncertainty, scope, reversible, standing,
+    expires_at: expiresInHours ? new Date(Date.now() + expiresInHours * 3600e3).toISOString() : null,
   }).select().single());
+}
+
+/** Record a money movement. external_id makes it idempotent (the same payment is never counted twice). */
+export async function addLedger({ division, category, amountUsd, basis = 'actual', source, externalId = null, note = null, occurredOn = null }) {
+  const row = { division, category, amount_usd: amountUsd, basis, source, external_id: externalId, note };
+  if (occurredOn) row.occurred_on = occurredOn;
+  const q = externalId ? db.from('ledger').upsert(row, { onConflict: 'external_id' }) : db.from('ledger').insert(row);
+  const { error } = await q;
+  if (error) throw new Error(error.message);
+}
+
+/** Report whether an outside service is really connected. Shown on the dashboard as-is. */
+export async function setIntegration(id, name, status, detail = null, setupSteps = null, division = null) {
+  await db.from('integrations').upsert({ id, name, status, detail, setup_steps: setupSteps, division, checked_at: new Date().toISOString() });
 }
 
 // Count rows created since local midnight.

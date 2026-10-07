@@ -26,6 +26,7 @@ function supabaseUrl() {
 
 // Keys never contain spaces; take the first word in case other text got pasted on the same line.
 const key = (name) => required(name).split(/\s+/)[0];
+const opt = (name) => clean(process.env[name]).split(/\s+/)[0] || '';
 
 export const config = {
   supabaseUrl: supabaseUrl(),
@@ -79,6 +80,39 @@ export const config = {
     token: process.env.SHOPIFY_ADMIN_TOKEN || '',
   },
 
+  // Public address of this worker (for SMS delivery callbacks, Etsy sign-in, payment webhooks).
+  // Railway sets RAILWAY_PUBLIC_DOMAIN automatically once you click "Generate Domain".
+  publicUrl: (clean(process.env.PUBLIC_URL) || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '')).replace(/\/$/, ''),
+  port: Number(process.env.PORT || 8080),
+  dashboardUrl: clean(process.env.DASHBOARD_URL),
+
+  // Morning text + alerts (Twilio).
+  twilio: {
+    accountSid: opt('TWILIO_ACCOUNT_SID'),
+    authToken: opt('TWILIO_AUTH_TOKEN'),
+    from: opt('TWILIO_FROM'),                         // your Twilio number, e.g. +19795550123
+    messagingServiceSid: opt('TWILIO_MESSAGING_SERVICE_SID'),
+  },
+
+  // Invoices and payment links.
+  stripe: { secretKey: opt('STRIPE_SECRET_KEY'), webhookSecret: opt('STRIPE_WEBHOOK_SECRET') },
+
+  // Etsy Open API v3 (your own shop).
+  etsy: { apiKey: opt('ETSY_API_KEY'), sharedSecret: opt('ETSY_SHARED_SECRET') },
+  printful: { token: opt('PRINTFUL_TOKEN') },
+
+  // KJ's Picks (the sports project). Read-only. A dedicated member login is the safest option.
+  sports: {
+    supabaseUrl: clean(process.env.SPORTS_SUPABASE_URL),
+    anonKey: opt('SPORTS_SUPABASE_ANON_KEY'),
+    email: clean(process.env.SPORTS_EMAIL),
+    password: clean(process.env.SPORTS_PASSWORD),
+    siteUrl: clean(process.env.SPORTS_SITE_URL) || 'https://keckjones.github.io/cfb-edge/',
+  },
+
+  // Meetings: a booking link with your real availability (Google Calendar appointment page, Cal.com, Calendly).
+  bookingUrl: clean(process.env.BOOKING_URL),
+
   managerCron: process.env.MANAGER_CRON || '0 */3 * * *', // every 3 hours
   pollSeconds: Number(process.env.POLL_SECONDS || 10),
   timezone: process.env.TZ || 'America/Chicago',
@@ -92,3 +126,8 @@ if (!config.smtp.from) {
 export const emailReady = () =>
   !!(config.smtp.host && config.smtp.user && config.smtp.pass &&
      config.business.name && config.business.address);
+
+export const smsReady = () => !!(config.twilio.accountSid && config.twilio.authToken && (config.twilio.from || config.twilio.messagingServiceSid));
+export const stripeReady = () => !!config.stripe.secretKey;
+export const etsyReady = () => !!config.etsy.apiKey;
+export const sportsReady = () => !!(config.sports.supabaseUrl && config.sports.anonKey && config.sports.email && config.sports.password);

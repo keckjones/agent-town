@@ -6,16 +6,19 @@ import { emailReady } from '../config.js';
 // What the manager is allowed to assign. Keep in sync with agents/index.js.
 export const ASSIGNABLE = {
   research: { kinds: ['research'], input: '{"topic": "a specific research question"}' },
-  scout: { kinds: ['find_prospects'], input: '{"category": "e.g. hair salon", "limit": 10}' },
-  merchant: { kinds: ['create_product'], input: '{"idea": "optional product idea"}' },
+  scout: { kinds: ['find_prospects'], input: '{"category": "e.g. hair salon", "city": "optional, one of the outreach areas", "limit": 10}' },
+  etsy: { kinds: ['research_products'], input: '{"focus": "optional product niche"}' },
+  opportunity: { kinds: ['propose_opportunities'], input: '{"focus": "optional"}' },
+  sports: { kinds: ['draft_content'], input: '{}' },
   marketer: { kinds: ['plan_campaign'], input: '{"focus": "what the campaign should achieve"}' },
-  social: { kinds: ['write_posts'], input: '{"theme": "...", "count": 3}' },
 };
 
 const SYSTEM = `You are the manager of a small team of AI agents running a one-person online business.
 Your job: move the business toward its weekly revenue goal with the least wasted effort and money.
-Priorities: (1) the local website-redesign outreach pipeline, which earns fastest; (2) research that sharpens offers;
-(3) products, marketing, and social posts once there is something worth promoting.
+Divisions: local website agency (earns fastest), sports platform marketing, Etsy shop, new ventures.
+Priorities: (1) keep the agency pipeline full but don't outrun the owner's approvals; (2) Etsy research only a few times a week;
+(3) opportunity memos at most twice a week; (4) sports content only when the data feed is connected and fresh.
+Never assign work to a division whose integration is missing if the work would be wasted. Spend little; budgets are real money.
 Don't pile up work: if many approvals are waiting for the owner, create fewer new drafts and say so.
 Stay within the daily budget. Only assign tasks from the allowed list.`;
 
@@ -29,6 +32,12 @@ async function snapshot() {
     db.from('tasks').select('agent_id').in('status', ['queued', 'running']),
     db.from('tasks').select('agent_id, kind, error').eq('status', 'failed').gte('finished_at', startOfToday()).limit(10),
     db.from('documents').select('kind, title, created_at').order('created_at', { ascending: false }).limit(12),
+  ]);
+  const [{ data: ints }, { data: wfs }, { data: opps }, { data: prods }] = await Promise.all([
+    db.from('integrations').select('id, status'),
+    db.from('workflows').select('division, status'),
+    db.from('opportunities').select('created_at').gte('created_at', new Date(Date.now() - 7 * 864e5).toISOString()),
+    db.from('products').select('stage, created_at').gte('created_at', new Date(Date.now() - 7 * 864e5).toISOString()),
   ]);
   const tally = (rows, key) => (rows || []).reduce((m, r) => ((m[r[key]] = (m[r[key]] || 0) + 1), m), {});
   return {
@@ -44,6 +53,10 @@ async function snapshot() {
     tasks_in_queue_by_agent: tally(queued.data, 'agent_id'),
     failures_today: failed.data || [],
     recent_documents: docs.data || [],
+    integrations: Object.fromEntries((ints || []).map((i) => [i.id, i.status])),
+    workflows_by_division_status: (wfs || []).reduce((m, w) => { const k = `${w.division}:${w.status}`; m[k] = (m[k] || 0) + 1; return m; }, {}),
+    opportunity_memos_last_7_days: (opps || []).length,
+    etsy_concepts_last_7_days: (prods || []).length,
     now: new Date().toString(),
   };
 }

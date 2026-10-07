@@ -19,6 +19,8 @@
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.14",
     "playwright": "1.48.2",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "imapflow": "^1.0.150",
+    "mailparser": "^3.7.1"
   }
 }

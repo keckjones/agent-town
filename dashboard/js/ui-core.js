@@ -49,7 +49,7 @@ const FIELD_LABELS = { to: 'To', subject: 'Subject', body: 'Message', text: 'Pos
 /** A full approval card: what, why, evidence, exact content, money at risk, scope, reversibility, and the five actions. */
 export function approvalCard(a, S) {
   const p = a.payload || {};
-  const editable = a.status === 'pending' || a.status === 'changes_requested' || a.status === 'held';
+  const editable = a.status === 'pending' || a.status === 'held';
   const fields = Object.keys(FIELD_LABELS).filter((k) => typeof p[k] === 'string' || typeof p[k] === 'number');
   const content = fields.map((k) => {
     const v = p[k];
@@ -65,13 +65,15 @@ export function approvalCard(a, S) {
   if (p.plan_text) extra.push(`<div><div class="meta">The plan</div><div class="pre">${esc(p.plan_text)}</div></div>`);
   if (p.url && a.kind === 'site_publish') extra.push(`<div class="meta">Will go live at: ${esc(p.url)}</div>`);
   const ev = Array.isArray(a.evidence) ? a.evidence : [];
-  const res = a.result?.note || a.result?.waiting || a.result?.error;
+  const res = a.result?.revisions ? (a.result?.waiting || a.result?.error) : (a.result?.note || a.result?.waiting || a.result?.error);
   const agent = S.t('agents').find((x) => x.id === a.agent_id);
   return `<article class="card ${a.status === 'pending' ? 'prio' : ''} ${a.status === 'failed' ? 'err' : ''}" data-appr="${a.id}">
     <div class="row between"><h4>${esc(a.title)}</h4>${statusChip(a.status)}</div>
     <div class="meta">${esc(agent?.name || a.agent_id || '')} · ${ago(a.created_at)}${a.expires_at ? ` · expires ${ago(a.expires_at)}` : ''}${a.standing ? ' · STANDING APPROVAL' : ''}</div>
     <div class="plain"><b>In plain English:</b> ${esc(a.explain || APPROVAL_EXPLAIN[a.kind] || 'Approving lets the agent take the action described below, exactly as written.')}${a.explain && APPROVAL_EXPLAIN[a.kind] ? `<div class="meta" style="margin-top:4px">${esc(APPROVAL_EXPLAIN[a.kind])}</div>` : ''}
       ${(() => { const t = termsIn([a.title, a.reason, a.scope, a.expected_outcome, a.uncertainty].join(' '), 5); return t.length ? `<details class="x"><summary>Words used here</summary><dl class="facts">${t.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></details>` : ''; })()}</div>
+    ${a.status === 'revising' || a.status === 'changes_requested' ? `<div class="note warn">✎ ${a.status === 'revising' ? 'Revising per your note' : 'Waiting for the agent to start revising'}… <span class="elapsed" data-since="${esc(a.result?.revising_since || a.decided_at || a.created_at)}"></span> <span class="faint">(usually 5–20 seconds)</span>${a.decision_note ? `<br><span class="faint">Your note: “${esc(a.decision_note.slice(0, 200))}”</span>` : ''}${a.result?.revise_error ? `<br><span class="down">${esc(a.result.revise_error)}</span>` : ''}</div>` : ''}
+    ${a.status === 'pending' && a.result?.revisions?.length ? `<div class="note">✓ ${esc(a.result.note || 'Revised')}</div>` : ''}
     ${a.reason ? `<div><b>Why:</b> ${esc(a.reason)}</div>` : ''}
     <dl class="facts">
       <dt>Cost</dt><dd>${money(a.cost_usd, 2)}</dd>

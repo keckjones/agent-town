@@ -52,7 +52,7 @@ export const PANELS = {
   approvals(S, ui) {
     const tab = ui.tab || 'pending';
     const groups = {
-      pending: S.t('approvals').filter((a) => ['pending', 'changes_requested', 'held'].includes(a.status)),
+      pending: S.t('approvals').filter((a) => ['pending', 'changes_requested', 'revising', 'held'].includes(a.status)),
       running: S.t('approvals').filter((a) => ['approved', 'failed'].includes(a.status)),
       done: S.t('approvals').filter((a) => ['executed', 'rejected', 'expired', 'paused'].includes(a.status)).slice(0, 40),
     };

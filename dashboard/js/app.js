@@ -497,7 +497,7 @@ const ACTIONS = {
   async 'save-edit'(d) { const { a, payload } = collectApproval(d.id); await S.update('approvals', { id: a.id }, { payload, status: 'pending' }); if (!S.demo) toast('Saved. Still waiting for your approval.'); },
   async changes(d) {
     modalForm('Request changes', '<label class="f">What should change?<textarea class="i" id="rc-note" required></textarea></label>', async (m) => {
-      await S.update('approvals', { id: Number(d.id) }, { status: 'changes_requested', decision_note: val('rc-note', m) }); if (!S.demo) toast('Sent back with your note.');
+      await S.update('approvals', { id: Number(d.id) }, { status: 'changes_requested', decision_note: val('rc-note', m) }); if (!S.demo) toast('Sent back. The agent is revising it now (usually 5–20 seconds); it comes right back here.');
     });
   },
   async reject(d) { await S.update('approvals', { id: Number(d.id) }, { status: 'rejected' }); if (!S.demo) toast('Rejected'); },

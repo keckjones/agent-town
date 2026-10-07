@@ -168,3 +168,20 @@ export async function startProject(a) {
   await advance(project?.workflow_id, 'manager', { stage: 'in_progress', status: 'active', nextAction: 'Agents are working on the steps' });
   return { note: `Project started: ${steps.length} step(s) handed to the team. Public results will still ask for your approval.` };
 }
+
+/** "Request changes" on a project plan: re-plan with your note and update the same card. */
+export async function replanIdea(a, note) {
+  const { askJSON } = await import('./claude.js');
+  const { PLAIN_ENGLISH } = await import('./explain.js');
+  const { data: project } = await db.from('team_projects').select('*').eq('id', a.payload.project_id).single();
+  const plan = await askJSON({ agentId: 'manager', cheap: true, maxTokens: 1600, system: `${PLAIN_ENGLISH}\n${PLAN_SYSTEM(capabilityList())}`,
+    prompt: `Owner's idea: ${project.idea}\nYour previous plan:\n${a.payload.plan_text}\n\nThe owner asked for these changes: """${note}"""\nReturn the full revised plan.` });
+  const steps = (plan.steps || []).filter((x) => CAPABILITIES[x.need]).slice(0, 6);
+  const title = String(plan.title || project.title).slice(0, 120);
+  await db.from('team_projects').update({ title, plan: { ...plan, title, steps }, updated_at: now() }).eq('id', project.id);
+  return {
+    title: `Start project: ${title} (${steps.length} step${steps.length === 1 ? '' : 's'})`,
+    expected_outcome: steps.map((x) => `${x.n}. ${CAPABILITIES[x.need].agent}: ${x.title}`).join(' · '),
+    payload: { ...a.payload, steps, plan_text: [plan.plain_english, '', ...steps.map((x) => `${x.n}. ${x.title} (${CAPABILITIES[x.need].label}, by ${CAPABILITIES[x.need].agent})${x.after ? ` after step ${x.after}` : ''}`)].join('\n') },
+  };
+}

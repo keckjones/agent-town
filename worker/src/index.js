@@ -21,6 +21,7 @@ import { youtubeConnectUrl } from './lib/youtube.js';
 import { askBoss } from './lib/boss.js';
 import { routeWork, onRequestTask, planIdea } from './lib/collab.js';
 import { refreshLinkMetrics } from './lib/links.js';
+import { reviseRequested } from './lib/revise.js';
 import { gmailConnectUrl, refreshGmailState } from './lib/gmail.js';
 import { logEvent } from './lib/workflows.js';
 
@@ -213,6 +214,7 @@ async function processCommands() {
 const commandsJob = single(processCommands);
 const approvalsJob = single(async () => { await runApprovals(); kick(); });
 const routeJob = single(async () => { await routeWork(); kick(); });
+const reviseJob = single(reviseRequested);
 /** Check cheaply every few seconds; run the job only when there's something waiting. */
 function fastLane(name, ms, job, hasWork, evenWhenPaused = false) {
   let checking = false;
@@ -258,6 +260,9 @@ async function main() {
   // Fast lane: your clicks are picked up within ~2 seconds instead of waiting for the next minute.
   fastLane('commands', 2000, commandsJob, async () => (await db.from('commands').select('id').eq('status', 'queued').limit(1)).data?.length, true);
   fastLane('approvals', 3000, approvalsJob, async () => (await db.from('approvals').select('id').eq('status', 'approved').limit(1)).data?.length);
+  // Request changes → the agent revises within seconds and the card comes back to you.
+  fastLane('revisions', 2000, reviseJob, async () => (await db.from('approvals').select('id').eq('status', 'changes_requested').limit(1)).data?.length, true);
+  every('* * * * *', 'revisions', reviseJob, { evenWhenPaused: true });
   fastLane('team requests', 3000, routeJob, async () => (await db.from('work_requests').select('id').eq('status', 'open').limit(1)).data?.length);
   every('* * * * *', 'digest', digestTick, { evenWhenPaused: true });          // the digest has its own pause switch
   every('*/2 * * * *', 'sms status', refreshSmsStatuses, { evenWhenPaused: true });

@@ -145,6 +145,11 @@ async function standing(a, campaignKind) {
 export async function runApprovals() {
   const { data, error } = await db.from('approvals').select('*').eq('status', 'approved').order('decided_at').limit(20);
   if (error) throw new Error(error.message);
+  if ((data || []).length && data[0].payload_hash === undefined) {
+    // The approval-safety columns don't exist yet: the database update (002_command_center.sql) hasn't been run.
+    await say('manager', 'Approved items are waiting: run supabase/002_command_center.sql (and 003) in the Supabase SQL Editor, then they will send.', 'error');
+    return;
+  }
   for (const a of data || []) {
     // Enforcement: exactly what was approved, still valid.
     if (!a.approved_hash || a.approved_hash !== a.payload_hash) { await finish(a.id, 'pending', { note: 'Content changed after approval; please review again.' }); continue; }

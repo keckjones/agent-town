@@ -20,7 +20,7 @@ function readBody(req, limit = 1e6) {
 }
 
 function send(res, code, body, type = 'text/plain') {
-  res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store' });
+  res.writeHead(code, { 'Content-Type': type === 'text/html' ? 'text/html; charset=utf-8' : type, 'Cache-Control': 'no-store' });
   res.end(body);
 }
 
@@ -33,6 +33,12 @@ export function startServer() {
     const url = new URL(req.url, 'http://local');
     try {
       if (req.method === 'GET' && url.pathname === '/health') return send(res, 200, 'ok');
+      // Public About + Privacy pages (Google's sign-in screen links to these).
+      if (req.method === 'GET' && ['/', '/about', '/about.html', '/privacy', '/privacy.html'].includes(url.pathname)) {
+        const file = url.pathname.startsWith('/privacy') ? 'privacy.html' : 'about.html';
+        const html = await (await import('node:fs/promises')).readFile(new URL(`./public/${file}`, import.meta.url), 'utf-8');
+        return send(res, 200, html.replace('href="privacy.html"', 'href="/privacy"'), 'text/html');
+      }
 
       if (req.method === 'POST' && url.pathname === '/webhooks/twilio/status') {
         const raw = (await readBody(req)).toString('utf-8');

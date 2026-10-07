@@ -93,7 +93,7 @@ Return JSON {"summary": "...", "needs": ["..."], "objections": ["..."], "next_st
     else if (['interested', 'proposal_requested'].includes(outcome)) {
       Object.assign(patch, { deal_stage: 'replied', replied_at: new Date().toISOString(), next_step: 'Send proposal' });
       if (email || p.email) await enqueue('postmaster', 'draft_proposal', { prospect_id: p.id }, { createdBy: 'caller', priority: 2 });
-      await advance(wf?.id, 'caller', { stage: 'prepare_proposal', nextAction: email || p.email ? 'Proposal being drafted' : 'Get their email address' });
+      await advance(wf?.id, 'caller', { stage: 'prepare_proposal', owner: email || p.email ? 'postmaster' : 'caller', nextAction: email || p.email ? 'Proposal being drafted' : 'Get their email address' });
     } else if (outcome === 'meeting_booked') {
       Object.assign(patch, { deal_stage: 'meeting', next_step: `Meeting ${meeting_at || '(time not recorded)'}`, next_step_at: meeting_at });
       await advance(wf?.id, 'caller', { stage: 'meeting', nextAction: `Meeting ${meeting_at || ''}` });

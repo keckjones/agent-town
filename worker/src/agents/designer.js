@@ -78,7 +78,7 @@ export const handlers = {
 
     await say('designer', `Private preview for ${p.name} is ready. Sending it to Quality Assurance.`, 'success');
     const wf = await findWorkflow('prospect', p.id, 'agency_lead');
-    await advance(wf?.id, 'designer', { stage: 'quality_check', nextAction: 'QA checks the preview', evidence: [{ claim: 'Private preview built', source: new_html, observed_at: new Date().toISOString() }] });
+    await advance(wf?.id, 'designer', { stage: 'quality_check', owner: 'qa', nextAction: 'QA checks the preview', evidence: [{ claim: 'Private preview built', source: new_html, observed_at: new Date().toISOString() }] });
     await enqueue('qa', 'check_site', { prospect_id: p.id, attempt: task.input.attempt || 1 }, { createdBy: 'designer', priority: 4 });
     return { prospect: p.name, comparison };
   },

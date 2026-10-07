@@ -18,6 +18,8 @@ import { sportsReady } from './config.js';
 import { recordMilestone } from './agents/realestate.js';
 import { shopifyReady } from './lib/shopify.js';
 import { youtubeConnectUrl } from './lib/youtube.js';
+import { askBoss } from './lib/boss.js';
+import { logEvent } from './lib/workflows.js';
 
 const CONCURRENCY = Number(process.env.CONCURRENCY || 2);
 const MAX_ATTEMPTS = 3;
@@ -126,6 +128,33 @@ const RUNNABLE = {
   brand_dev: ['propose_brand'], strategy: ['plan_calendar'], scriptwriter: ['write_script'], creative: ['produce'], editor: ['edit'], content_qa: ['review'],
   publisher: ['publish_due'], growth: ['measure', 'evaluate_brands'], community: ['check_comments'], account_prov: ['check_accounts'],
 };
+// Retry a failed task: re-queue the same row once. External side effects stay duplicate-proof through runOnce keys.
+async function retryTask(id) {
+  const { data: t } = await db.from('tasks').select('*').eq('id', id).single();
+  if (!t) throw new Error('Task not found');
+  if (t.status !== 'failed') throw new Error(`Task is ${t.status}, not failed`);
+  const { data: open } = await db.from('tasks').select('id').eq('agent_id', t.agent_id).eq('kind', t.kind).in('status', ['queued', 'running']).contains('input', t.input || {}).limit(1);
+  if (open?.length) return { already_queued: open[0].id };
+  const { data: upd } = await db.from('tasks').update({ status: 'queued', attempts: 0, error: null, finished_at: null, run_after: new Date().toISOString(), created_by: 'owner_retry' }).eq('id', id).eq('status', 'failed').select('id');
+  if (!upd?.length) return { already_retried: true };
+  await setAgent(t.agent_id, { status: 'idle', current_task: null });
+  await say(t.agent_id, `Retrying ${verbs[t.kind] || t.kind} (requested by owner).`);
+  return { requeued: id };
+}
+
+// Reassign a workflow's owner to another agent in the same business. Logged as a handoff; permissions are unchanged
+// because each agent can still only run its own task types.
+async function reassignWorkflow(id, to) {
+  const [{ data: wf }, { data: agent }] = await Promise.all([db.from('workflows').select('*').eq('id', id).single(), db.from('agents').select('id,division').eq('id', to).single()]);
+  if (!wf) throw new Error('Workflow not found');
+  if (!agent) throw new Error('Agent not found');
+  if (agent.division !== wf.division) throw new Error('Can only reassign within the same business');
+  if (wf.owner_agent === to) return { unchanged: true };
+  await db.from('workflows').update({ owner_agent: to, updated_at: new Date().toISOString() }).eq('id', id);
+  await logEvent(id, 'manager', 'handoff', `Reassigned by owner: ${wf.owner_agent || 'nobody'} → ${to}`, { from: wf.owner_agent, to, stage: wf.stage, by: 'owner' });
+  return { from: wf.owner_agent, to };
+}
+
 async function processCommands() {
   const { data } = await db.from('commands').select('*').eq('status', 'queued').order('created_at').limit(10);
   for (const c of data || []) {
@@ -141,6 +170,9 @@ async function processCommands() {
         const t = await enqueue(agent, kind, input || {}, { priority: 2, createdBy: 'owner' });
         result = { task_id: t.id };
       } else if (c.kind === 're_milestone') result = await recordMilestone(c.input || {});
+      else if (c.kind === 'retry_task') result = await retryTask(Number(c.input?.task_id));
+      else if (c.kind === 'reassign_workflow') result = await reassignWorkflow(Number(c.input?.workflow_id), String(c.input?.to || ''));
+      else if (c.kind === 'ask_boss') result = await askBoss(c.input?.question);
       else if (c.kind === 'youtube_connect') result = { url: await youtubeConnectUrl(Number(c.input.account_id)) };
       else throw new Error(`Unknown command ${c.kind}`);
     } catch (e) { status = 'failed'; result = { error: e.message }; }

@@ -75,7 +75,7 @@ export const handlers = {
     if (!report.passed && attempt < 2) {
       await say('qa', `${p.name}: ${report.blocking.join('; ')}. Sent back to Website Production.`, 'warn');
       await enqueue('designer', 'design_page', { prospect_id: p.id, fix: report.blocking, attempt: attempt + 1 }, { createdBy: 'qa', priority: 4 });
-      await advance(wf?.id, 'qa', { stage: 'preview_fix', nextAction: 'Fix QA issues' });
+      await advance(wf?.id, 'qa', { stage: 'preview_fix', owner: 'designer', nextAction: 'Fix QA issues' });
       return report;
     }
     if (!report.passed) {
@@ -83,7 +83,7 @@ export const handlers = {
       return report;
     }
     await say('qa', `${p.name}'s preview passed QA (${report.passes.length} checks).`, 'success');
-    await advance(wf?.id, 'qa', { stage: 'prepare_outreach', nextAction: p.email ? 'Draft outreach email' : 'Prepare call script' });
+    await advance(wf?.id, 'qa', { stage: 'prepare_outreach', owner: p.email ? 'postmaster' : 'caller', nextAction: p.email ? 'Draft outreach email' : 'Prepare call script' });
     if (p.email) await enqueue('postmaster', 'draft_email', { prospect_id: p.id }, { createdBy: 'qa', priority: 4 });
     else await enqueue('caller', 'prepare_call', { prospect_id: p.id, reason: 'no verified email' }, { createdBy: 'qa', priority: 4 });
     return report;

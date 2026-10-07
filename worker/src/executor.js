@@ -157,7 +157,14 @@ export async function runApprovals() {
     await say('manager', 'Approved items are waiting: run supabase/002_command_center.sql (and 003) in the Supabase SQL Editor, then they will send.', 'error');
     return;
   }
+  // Per-business pause: approved items for a paused business wait (they are not cancelled).
+  const { data: divs } = await db.from('divisions').select('id, status');
+  const paused = new Set((divs || []).filter((d) => d.status === 'paused').map((d) => d.id));
   for (const a of data || []) {
+    if (a.division && paused.has(a.division)) {
+      if (!a.result?.waiting?.startsWith('Business paused')) await db.from('approvals').update({ result: { waiting: 'Business paused by owner. This runs when you resume it.' } }).eq('id', a.id);
+      continue;
+    }
     // Enforcement: exactly what was approved, still valid.
     if (!a.approved_hash || a.approved_hash !== a.payload_hash) { await finish(a.id, 'pending', { note: 'Content changed after approval; please review again.' }); continue; }
     if (a.expires_at && new Date(a.expires_at) < new Date()) { await finish(a.id, 'expired', { note: 'Approval window passed before it could run. Ask the agent to redo it.' }); continue; }

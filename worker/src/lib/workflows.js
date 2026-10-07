@@ -53,6 +53,10 @@ export async function advance(workflowId, agentId, { stage, status, nextAction, 
   if (evidence) patch.evidence = [...(wf.evidence || []), ...evidence];
   if (data) patch.data = { ...(wf.data || {}), ...data };
   await db.from('workflows').update(patch).eq('id', workflowId);
+  // Explicit handoff record: the trading floor draws a line between these two desks only from rows like this.
+  if (owner !== undefined && owner && wf.owner_agent && owner !== wf.owner_agent) {
+    await logEvent(workflowId, agentId, 'handoff', `${wf.stage}${stage && stage !== wf.stage ? ` → ${stage}` : ''}: handed to ${owner}`, { from: wf.owner_agent, to: owner, stage: stage || wf.stage });
+  }
   if (stage && stage !== wf.stage) await logEvent(workflowId, agentId, 'stage', `Stage: ${wf.stage} → ${stage}${note ? ` (${note})` : ''}`);
   else if (note) await logEvent(workflowId, agentId, 'note', note);
   if (blockers) await logEvent(workflowId, agentId, 'error', `Blocked: ${blockers}`);

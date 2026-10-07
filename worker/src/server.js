@@ -7,6 +7,7 @@ import { handleStripeWebhook } from './lib/stripe.js';
 import { etsyAuthStart, etsyAuthCallback } from './lib/etsy.js';
 import { validShopifyWebhook, orderRevenue } from './lib/shopify.js';
 import { db, addLedger, enqueue } from './lib/db.js';
+import { youtubeCallback } from './lib/youtube.js';
 
 function readBody(req, limit = 1e6) {
   return new Promise((resolve, reject) => {
@@ -72,6 +73,11 @@ export function startServer() {
           await db.from('orders').update({ status: 'refunded', updated_at: new Date().toISOString() }).eq('external_id', `shopify:${o.order_id}`);
         }
         return send(res, 200, 'ok');
+      }
+
+      if (req.method === 'GET' && url.pathname === '/oauth/youtube/callback') {
+        const r = await youtubeCallback(url.searchParams);
+        return send(res, r.ok ? 200 : 400, page(r.ok ? 'YouTube connected' : 'YouTube not connected', r.message), 'text/html');
       }
 
       if (req.method === 'GET' && url.pathname === '/oauth/etsy/start') {

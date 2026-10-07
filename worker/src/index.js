@@ -17,6 +17,7 @@ import { refreshSmsStatuses } from './lib/sms.js';
 import { sportsReady } from './config.js';
 import { recordMilestone } from './agents/realestate.js';
 import { shopifyReady } from './lib/shopify.js';
+import { youtubeConnectUrl } from './lib/youtube.js';
 
 const CONCURRENCY = Number(process.env.CONCURRENCY || 2);
 const MAX_ATTEMPTS = 3;
@@ -122,6 +123,8 @@ const RUNNABLE = {
   ds_research: ['research_niches'], ds_store: ['build_listing'], ds_orders: ['review_order', 'sync_shopify_orders'],
   re_market: ['market_report'], re_leads: ['import_leads'], re_underwrite: ['underwrite'], re_deals: ['plan_outreach', 'prepare_offer'], re_buyers: ['match_buyers'],
   risk: ['check_risks'], capital: ['allocation_report'], learning: ['weekly_learning'], experiments: ['design_experiment'], improve: ['find_bottlenecks'],
+  brand_dev: ['propose_brand'], strategy: ['plan_calendar'], scriptwriter: ['write_script'], creative: ['produce'], editor: ['edit'], content_qa: ['review'],
+  publisher: ['publish_due'], growth: ['measure', 'evaluate_brands'], community: ['check_comments'], account_prov: ['check_accounts'],
 };
 async function processCommands() {
   const { data } = await db.from('commands').select('*').eq('status', 'queued').order('created_at').limit(10);
@@ -138,6 +141,7 @@ async function processCommands() {
         const t = await enqueue(agent, kind, input || {}, { priority: 2, createdBy: 'owner' });
         result = { task_id: t.id };
       } else if (c.kind === 're_milestone') result = await recordMilestone(c.input || {});
+      else if (c.kind === 'youtube_connect') result = { url: await youtubeConnectUrl(Number(c.input.account_id)) };
       else throw new Error(`Unknown command ${c.kind}`);
     } catch (e) { status = 'failed'; result = { error: e.message }; }
     await db.from('commands').update({ status, result, finished_at: new Date().toISOString() }).eq('id', c.id);
@@ -180,6 +184,11 @@ async function main() {
   every('0 6 * * 1', 'weekly learning', once('learning', 'weekly_learning', {}, 6));
   every('15 6 * * 1', 'capital', once('capital', 'allocation_report', {}, 6));
   every('30 6 * * 1', 'bottlenecks', once('improve', 'find_bottlenecks', {}, 7));
+  every('*/10 * * * *', 'publishing', once('publisher', 'publish_due', {}, 3));
+  every('40 7 * * *', 'content metrics', once('growth', 'measure', {}, 6));
+  every('25 * * * *', 'comments', once('community', 'check_comments', {}, 6));
+  every('5 */6 * * *', 'accounts', once('account_prov', 'check_accounts', {}, 6));
+  every('45 6 * * 1', 'brand evaluation', once('growth', 'evaluate_brands', {}, 6));
 
   // Keep the dashboard's "online" light green.
   setInterval(() => db.from('agents').update({ last_seen: new Date().toISOString() }).eq('id', 'manager').then(() => {}), 60000);

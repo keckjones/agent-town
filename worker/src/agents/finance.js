@@ -55,6 +55,13 @@ export async function metricsForDay(ymd, tz) {
     count('approvals', (q) => q.eq('status', 'pending').eq('kind', 're_offer')),
     count('re_deals', (q) => q.in('stage', ['under_contract', 'due_diligence', 'marketing', 'buyer_selected', 'assignment_signed', 'closing'])),
   ]);
+  const [pubCount, pubFailed, videosInProd, brandsValidated] = await Promise.all([
+    count('content_items', (q) => q.eq('division', 'media').in('stage', ['published', 'measured']).gte('published_at', from).lt('published_at', to)),
+    count('content_items', (q) => q.eq('division', 'media').eq('stage', 'blocked')),
+    count('content_items', (q) => q.eq('division', 'media').in('stage', ['script', 'creation', 'editing', 'review'])),
+    count('brands', (q) => q.eq('status', 'validated').is('ceo_agent_id', null)),
+  ]);
+  const { data: viewRows } = await db.from('brand_metrics').select('views').eq('observed_on', ymd);
   const { data: dsLed } = await db.from('ledger').select('category, amount_usd, basis').eq('occurred_on', ymd).eq('division', 'dropship');
   const dsRev = sum((dsLed || []).filter((r) => r.category === 'revenue' && r.basis === 'actual'));
   const { data: opp } = await db.from('opportunities').select('title, scores').eq('status', 'proposed').order('created_at', { ascending: false }).limit(5);
@@ -68,6 +75,7 @@ export async function metricsForDay(ymd, tz) {
     sports: snap?.[0] ? { record: snap[0].official_stats?.ALL?.record, units: snap[0].official_stats?.ALL?.units, stale: snap[0].stale, posted: posted || 0 } : null,
     bestOpportunity: best?.title || null,
     dropship: { revenue: dsRev, open: dsOpen, exceptions: dsExceptions },
+    media: { published: pubCount, blocked: pubFailed, inProduction: videosInProd, validated: brandsValidated, views: (viewRows || []).reduce((s, r) => s + Number(r.views || 0), 0) },
     realestate: { deadlines72h: reDeadlines, offersAwaiting: reOffers, activeContracts: reContracts },
   };
 }
@@ -85,6 +93,8 @@ export function digestText(m, dashboardUrl) {
     m.sports ? `Sports: official ${m.sports.record || 'n/a'}${m.sports.units != null ? ` (${m.sports.units > 0 ? '+' : ''}${m.sports.units}u)` : ''}, ${m.sports.posted} posts${m.sports.stale ? ', model data STALE' : ''}` : 'Sports: not connected',
     m.dropship && (m.dropship.revenue || m.dropship.open || m.dropship.exceptions) ? `Dropship: ${money(m.dropship.revenue)} collected, ${m.dropship.open} open orders${m.dropship.exceptions ? `, ${m.dropship.exceptions} EXCEPTIONS` : ''}` : null,
     m.realestate && (m.realestate.activeContracts || m.realestate.offersAwaiting || m.realestate.deadlines72h) ? `Real estate: ${m.realestate.activeContracts} under contract, ${m.realestate.offersAwaiting} offers need you${m.realestate.deadlines72h ? `, ${m.realestate.deadlines72h} DEADLINES within 72h` : ''}` : null,
+    m.media && (m.media.published || m.media.blocked || m.media.inProduction) ? `Content: ${m.media.published} published, ${m.media.inProduction} in production${m.media.blocked ? `, ${m.media.blocked} BLOCKED` : ''}${m.media.views ? `, ${m.media.views.toLocaleString()} views (YouTube)` : ''}` : null,
+    m.media?.validated ? `Brands meeting criteria: ${m.media.validated} (promotion needs your approval)` : null,
     m.bestOpportunity ? `Top idea: ${m.bestOpportunity}` : null,
     `Needs you: ${m.approvals} approvals${m.blocked ? `, ${m.blocked} blocked` : ''}${m.failedTasks ? `, ${m.failedTasks} failed jobs` : ''}${m.intErrors ? `, ${m.intErrors} integration errors` : ''}`,
     dashboardUrl || null,

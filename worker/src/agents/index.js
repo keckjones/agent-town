@@ -18,6 +18,7 @@ import { handlers as opportunity } from './opportunity.js';
 import { handlers as dropship } from './dropship.js';
 import { handlers as realestate } from './realestate.js';
 import { handlers as shared } from './shared.js';
+import { handlers as media } from './media.js';
 
 // agent id → { task kind → handler }
 export const registry = {
@@ -27,6 +28,8 @@ export const registry = {
   ds_research: dropship, ds_product: dropship, ds_supplier: dropship, ds_store: dropship, ds_orders: dropship,
   re_market: realestate, re_leads: realestate, re_underwrite: realestate, re_deals: realestate, re_buyers: realestate,
   experiments: shared, learning: shared, capital: shared, risk: shared, improve: shared,
+  brand_dev: media, account_prov: media, strategy: media, scriptwriter: media, creative: media, editor: media, content_qa: media,
+  publisher: media, community: media, growth: media, packaging: media, monetize: media,
 };
 
 // What each agent is doing, in plain words (shown in the live feed and the "why" panel).
@@ -71,4 +74,18 @@ export const verbs = {
   weekly_learning: 'Learning from results',
   design_experiment: 'Designing an experiment',
   find_bottlenecks: 'Looking for bottlenecks',
+  propose_brand: 'Researching and proposing a brand',
+  prepare_accounts: 'Preparing account setup checklists',
+  check_accounts: 'Checking account connections',
+  plan_calendar: 'Planning the content calendar',
+  write_script: 'Researching and writing a script',
+  produce: 'Producing a video',
+  edit: 'Editing a video',
+  package: 'Writing title and description',
+  review: 'Quality-checking content',
+  publish_due: 'Publishing scheduled content',
+  measure: 'Measuring published content',
+  check_comments: 'Reading comments',
+  evaluate_brands: 'Checking brands against success criteria',
+  brand_report: 'Writing a brand operating report',
 };

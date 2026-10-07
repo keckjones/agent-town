@@ -12,6 +12,7 @@ import { sendOutreach } from './agents/postmaster.js';
 import { publishProduct } from './agents/etsy.js';
 import { launchDropshipProduct } from './agents/dropship.js';
 import { executeRealEstate } from './agents/realestate.js';
+import { executeMedia } from './agents/media.js';
 import { findWorkflow, advance, logEvent } from './lib/workflows.js';
 
 async function finish(id, status, result) {
@@ -121,6 +122,10 @@ const executors = {
   async re_letter(a) { await finish(a.id, 'executed', await executeRealEstate(a)); },
   async re_offer(a) { await finish(a.id, 'executed', await executeRealEstate(a)); },
   async re_deal_package(a) { await finish(a.id, 'executed', await executeRealEstate(a)); },
+  async brand_experiment(a) { await finish(a.id, 'executed', await executeMedia(a)); },
+  async brand_content(a) { await standing(a, null); await db.from('brands').update({ status: 'experimenting' }).eq('id', a.payload.brand_id); },
+  async content_publish(a) { await finish(a.id, 'executed', await executeMedia(a)); },
+  async ceo_promotion(a) { await finish(a.id, 'executed', await executeMedia(a)); },
   async budget_allocation(a) { await finish(a.id, 'executed', { note: 'Division budgets recorded. No money was moved.' }); },
 
   async opportunity_experiment(a) {

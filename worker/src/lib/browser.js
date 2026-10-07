@@ -39,3 +39,28 @@ export async function closeBrowser() {
   if (browser) await browser.close().catch(() => {});
   browser = null;
 }
+
+/**
+ * Record an HTML animation as a video (VP8 .webm). The page must finish its animation within `seconds`.
+ * Returns a Buffer. Used for original short-form videos built from our own graphics and captions (no audio).
+ */
+export async function recordHtmlVideo(html, seconds, size = { width: 1080, height: 1920 }) {
+  const fs = await import('node:fs/promises');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'rec-'));
+  const b = await getBrowser();
+  const scale = 2;
+  const ctx = await b.newContext({ viewport: { width: size.width / scale, height: size.height / scale }, deviceScaleFactor: scale, recordVideo: { dir, size } });
+  const page = await ctx.newPage();
+  try {
+    await page.setContent(html, { waitUntil: 'load', timeout: 30000 }).catch(() => {});
+    await page.waitForTimeout(Math.ceil(seconds * 1000) + 300);
+  } finally {
+    await ctx.close().catch(() => {});
+  }
+  const file = await page.video().path();
+  const buf = await fs.readFile(file);
+  await fs.rm(dir, { recursive: true, force: true });
+  return buf;
+}

@@ -104,6 +104,13 @@ export async function checkIntegrations() {
     return data.status === 'transactions_ok' ? ['connected', `Reviewed: ${JSON.stringify(data.attorney_review)}`] : ['needs_setup', `Status: ${data.status}. Offers and contracts stay blocked until a Texas real estate attorney reviews the templates.`];
   }, 'Hire a Texas real estate attorney to review: (1) purchase agreement with assignment clause, (2) seller notice under Occ. Code §1101.0045 (required since 2024), (3) buyer notice, (4) assignment agreement, (5) your outreach letter. Then record the review and approved templates in Real Estate.');
 
+  await check('youtube', 'YouTube (brand channels)', 'media', async () => {
+    if (!process.env.GOOGLE_OAUTH_CLIENT_ID || !process.env.GOOGLE_OAUTH_CLIENT_SECRET) return ['needs_setup', 'YouTube sign-in app not set up; videos become manual uploads'];
+    const { data } = await db.from('brand_accounts').select('status').eq('platform', 'youtube');
+    const n = (data || []).filter((a) => a.status === 'connected').length;
+    return n ? ['connected', `${n} channel(s) connected with verified access`] : ['unverified', 'Sign-in app ready; connect a brand channel from Brands'];
+  }, 'Google Cloud Console (same project as your Places key) → APIs & Services → Library → enable "YouTube Data API v3". → OAuth consent screen: External, add your email as a test user, scopes youtube.upload + youtube.readonly. → Credentials → Create credentials → OAuth client ID → Web application → Authorized redirect URI: <worker URL>/oauth/youtube/callback. → Railway: GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET. Note: until Google verifies the app, uploads through the API are locked to private; publish them from YouTube Studio, or apply for an API audit.');
+
   await check('ai_calling', 'AI phone calls', 'agency', async () => ['disabled',
     'Off by design. AI voices are "artificial voice" under the TCPA, and a listed business number is not consent. Calls become manual call tasks with a prepared script; AI calling would only ever apply to prospects who gave written consent, and needs a voice provider connected.',
     'Not available yet. Manual call tasks with scripts are fully working.']);

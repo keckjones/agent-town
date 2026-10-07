@@ -123,8 +123,9 @@ if (!config.smtp.from) {
   config.smtp.from = who ? `${who} <${config.smtp.user}>` : config.smtp.user;
 }
 
+// Email can go out through the Gmail API (config.gmailApi, set once you click "Connect Gmail") or SMTP.
 export const emailReady = () =>
-  !!(config.smtp.host && config.smtp.user && config.smtp.pass &&
+  !!((config.gmailApi || (config.smtp.host && config.smtp.user && config.smtp.pass)) &&
      config.business.name && config.business.address);
 
 export const smsReady = () => !!(config.twilio.accountSid && config.twilio.authToken && (config.twilio.from || config.twilio.messagingServiceSid));

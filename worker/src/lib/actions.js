@@ -15,10 +15,12 @@ export async function runOnce(key, kind, fn, { workflowId = null, request = null
   const { data: existing } = await db.from('actions').select('*').eq('key', key).maybeSingle();
   if (existing) {
     if (existing.status === 'done') return { skipped: true, result: existing.result };
-    if (existing.status === 'failed' && existing.result?.retryable) {
+    // Attempts that died on a connection/login error never reached the provider, so they are safe to retry too.
+    const neverSent = existing.status === 'unknown' && /Connection timeout|ETIMEDOUT|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|Greeting never received|Invalid login|Email not connected/i.test(existing.error || '');
+    if ((existing.status === 'failed' && existing.result?.retryable) || neverSent) {
       const { data: reclaimed } = await db.from('actions')
         .update({ status: 'started', error: null, updated_at: new Date().toISOString() })
-        .eq('key', key).eq('status', 'failed').select();
+        .eq('key', key).eq('status', existing.status).select();
       if (!reclaimed?.length) throw new AlreadyAttempted(`Another worker is already handling ${key}`);
     } else {
       throw new AlreadyAttempted(`Action ${key} was already attempted (status: ${existing.status}). Not repeating it automatically.`);

@@ -81,6 +81,8 @@ export function approvalCard(a, S) {
     ${content}${extra.join('')}
     ${a.decision_note ? `<div class="note">${esc(a.decision_note)}</div>` : ''}
     ${res ? `<div class="note ${a.status === 'failed' ? 'err' : ''}">${esc(res)}</div>` : ''}
+    ${/Connect Gmail|Connection timeout|mail server/i.test(res || '') ? gmailConnectBox(S) : ''}
+    ${a.status === 'failed' ? `<div class="row"><button class="btn sm" data-act="retry-approval" data-id="${a.id}">Try again</button><span class="meta">Safe: if it never reached the provider it runs once; if it might have, it stops and tells you.</span></div>` : ''}
     ${editable ? `<div class="row">
       <button class="btn go" data-act="approve" data-id="${a.id}">Approve</button>
       <button class="btn" data-act="save-edit" data-id="${a.id}">Save edits</button>
@@ -125,10 +127,19 @@ export function workflowCard(S, wf) {
   </div>`;
 }
 
+/** "Connect Gmail" button plus the single-use Google sign-in link once the worker has prepared it. */
+export function gmailConnectBox(S) {
+  const c = S.t('commands').find((x) => x.kind === 'gmail_connect');
+  const link = c?.result?.url ? `<a class="btn sm primary" href="${esc(c.result.url)}" target="_blank" rel="noopener">Open Google sign-in →</a><span class="meta">Sign in as agentickj@gmail.com and allow “Send email”. The link works once, for 15 minutes.</span>`
+    : c && ['queued', 'running'].includes(c.status) ? '<span class="meta">Preparing the sign-in link… (up to a minute)</span>'
+    : c?.status === 'failed' ? `<span class="down meta">${esc(c.result?.error || 'Could not prepare the link')}</span>` : '';
+  return `<div class="row"><button class="btn sm gold" data-act="gmail-connect">Connect Gmail</button>${link}</div>`;
+}
+
 export function integrationList(S, ids) {
   const rows = S.t('integrations').filter((i) => !ids || ids.includes(i.id));
   if (!rows.length) return '<p class="muted">Status appears after the worker\'s first check.</p>';
   return rows.map((i) => `<div class="card ${i.status === 'error' ? 'err' : ''}"><div class="row between"><b>${esc(i.name)}</b>${statusChip(i.status)}</div>
-    ${i.detail ? `<div class="meta">${esc(i.detail)}</div>` : ''}${i.status !== 'connected' && i.setup_steps ? `<details class="x"><summary>How to connect</summary><div class="note">${esc(i.setup_steps)}</div></details>` : ''}
+    ${i.detail ? `<div class="meta">${esc(i.detail)}</div>` : ''}${i.id === 'gmail' && i.status !== 'connected' ? gmailConnectBox(S) : ''}${i.status !== 'connected' && i.setup_steps ? `<details class="x"><summary>How to connect</summary><div class="note">${esc(i.setup_steps)}</div></details>` : ''}
     <div class="faint" style="font-size:11px">checked ${ago(i.checked_at)}</div></div>`).join('');
 }

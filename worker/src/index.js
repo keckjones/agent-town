@@ -19,6 +19,7 @@ import { recordMilestone } from './agents/realestate.js';
 import { shopifyReady } from './lib/shopify.js';
 import { youtubeConnectUrl } from './lib/youtube.js';
 import { askBoss } from './lib/boss.js';
+import { gmailConnectUrl, refreshGmailState } from './lib/gmail.js';
 import { logEvent } from './lib/workflows.js';
 
 const CONCURRENCY = Number(process.env.CONCURRENCY || 2);
@@ -173,6 +174,7 @@ async function processCommands() {
       else if (c.kind === 'retry_task') result = await retryTask(Number(c.input?.task_id));
       else if (c.kind === 'reassign_workflow') result = await reassignWorkflow(Number(c.input?.workflow_id), String(c.input?.to || ''));
       else if (c.kind === 'ask_boss') result = await askBoss(c.input?.question);
+      else if (c.kind === 'gmail_connect') result = { url: await gmailConnectUrl() };
       else if (c.kind === 'youtube_connect') result = { url: await youtubeConnectUrl(Number(c.input.account_id)) };
       else throw new Error(`Unknown command ${c.kind}`);
     } catch (e) { status = 'failed'; result = { error: e.message }; }
@@ -198,6 +200,7 @@ async function main() {
   const { count } = await db.from('tasks').select('*', { count: 'exact', head: true });
   if (!count) await firstJobs();
 
+  await refreshGmailState().catch(() => {});
   checkIntegrations().catch((e) => console.error('Integration check:', e.message));
 
   every(config.managerCron, 'manager', once('manager', 'plan', {}, 1));

@@ -530,6 +530,11 @@ const ACTIONS = {
     if (a.type === 'pause_business') return ACTIONS['pause-business']({ id: a.business, to: 'paused' });
   },
   async 'check-integrations'() { await S.command('check_integrations'); if (!S.demo) toast('Re-checking connections'); },
+  async 'gmail-connect'() { await S.command('gmail_connect'); if (!S.demo) toast('Preparing a Google sign-in link…'); },
+  async 'retry-approval'(d) {
+    if (inflight.has(`rappr:${d.id}`)) return; inflight.add(`rappr:${d.id}`);
+    await S.update('approvals', { id: Number(d.id) }, { status: 'approved', result: null }); if (!S.demo) toast('Trying again. Watch this card for the result.');
+  },
   async 'yt-connect'(d) { await S.command('youtube_connect', { account_id: Number(d.id) }); if (!S.demo) toast('Preparing a single-use sign-in link…'); },
   async 'acct-task'(d) {
     const a = S.t('brand_accounts').find((x) => String(x.id) === String(d.id)); if (!a) return;

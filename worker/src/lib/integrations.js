@@ -2,10 +2,11 @@
 // unless a live check passed. Each disconnected service carries exact setup steps.
 import nodemailer from 'nodemailer';
 import { config, emailReady, smsReady, stripeReady, etsyReady, sportsReady } from '../config.js';
+import { refreshGmailState, gmailApiConfigured } from './gmail.js';
 import { db, setIntegration } from './db.js';
 
 const STEPS = {
-  gmail: 'Sign in to agentickj@gmail.com → myaccount.google.com → Security → turn on 2-Step Verification → search "App passwords" → create one named agent-town → in Railway Variables add SMTP_PASS=<the 16 characters>. Also set BUSINESS_NAME and BUSINESS_ADDRESS.',
+  gmail: 'Recommended (works on every Railway plan): Google Cloud console → APIs & Services → Library → enable "Gmail API". Credentials → your OAuth client → add redirect URI <your Railway domain>/oauth/gmail/callback. OAuth consent screen → Audience → Publish app (so the sign-in does not expire after 7 days). Then click "Connect Gmail" here and sign in as agentickj@gmail.com. For reading replies also keep SMTP_PASS (a Google App Password). Set BUSINESS_NAME and BUSINESS_ADDRESS.',
   twilio: '1) twilio.com → sign up → buy a local number (~$1.15/mo). 2) Messaging → Regulatory Compliance → register a Sole Proprietor A2P 10DLC brand + campaign (use case "Account notifications", recipient = you). Carriers block texts until this is approved (usually 1–7 days). 3) Railway Variables: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM=+1XXXXXXXXXX. 4) Press "Send test text" in Finance.',
   public_url: 'Railway → your service → Settings → Networking → Generate Domain. Railway then provides the address automatically; redeploy once.',
   stripe: 'stripe.com → Developers → API keys → copy the Secret key → Railway STRIPE_SECRET_KEY. Then Developers → Webhooks → Add endpoint <worker URL>/webhooks/stripe with events checkout.session.completed and charge.refunded → copy the signing secret → Railway STRIPE_WEBHOOK_SECRET.',
@@ -39,9 +40,16 @@ export async function checkIntegrations() {
     config.googleApiKey ? ['unverified', 'Key present; marked connected after the next successful scouting run'] : ['needs_setup', 'GOOGLE_API_KEY missing']);
 
   await check('gmail', 'Email (agentickj@gmail.com)', 'agency', async () => {
-    if (!emailReady()) return ['needs_setup', 'Waiting for SMTP_PASS (Google App Password) and BUSINESS_NAME / BUSINESS_ADDRESS'];
-    const t = nodemailer.createTransport({ host: config.smtp.host, port: config.smtp.port, secure: config.smtp.port === 465, auth: { user: config.smtp.user, pass: config.smtp.pass } });
-    await t.verify();
+    await refreshGmailState();
+    if (!config.business.name || !config.business.address) return ['needs_setup', 'Set BUSINESS_NAME and BUSINESS_ADDRESS in Railway (required in every email).'];
+    if (config.gmailApi) return ['connected', `Sending through the Gmail API as ${config.gmailAddress}${config.smtp.pass ? '; replies read with the App Password' : '; add SMTP_PASS to also read replies'}`];
+    if (!emailReady()) return ['needs_setup', gmailApiConfigured() ? 'Click "Connect Gmail" to send from agentickj@gmail.com.' : 'Add GOOGLE_OAUTH_CLIENT_ID/SECRET and click "Connect Gmail" (or SMTP_PASS on a Railway Pro plan).'];
+    const t = nodemailer.createTransport({ host: config.smtp.host, port: config.smtp.port, secure: config.smtp.port === 465, auth: { user: config.smtp.user, pass: config.smtp.pass }, connectionTimeout: 10000, greetingTimeout: 10000 });
+    try { await t.verify(); }
+    catch (e) {
+      if (/timeout|ETIMEDOUT|ECONNREFUSED|Greeting/i.test(`${e.code} ${e.message}`)) return ['error', 'Gmail\'s mail server can\'t be reached from Railway (outgoing email ports are blocked below the Pro plan). Click "Connect Gmail" to send over HTTPS instead.'];
+      throw e;
+    }
     return ['connected', `Signed in as ${config.smtp.user} (sending + reply reading)`];
   });
 

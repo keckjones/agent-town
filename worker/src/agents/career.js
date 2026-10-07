@@ -196,11 +196,25 @@ export async function sendCareerMessage(messageId, { approvalId = null } = {}) {
 }
 
 /** Put an email in front of you (Approvals) or, with auto-send on and nothing flagged, send it. */
-async function queueEmail(p, contact, draft, { kind, attach, threadId = null }) {
+/**
+ * Write and deliver one email.
+ * Automatic mode (auto_send): no approvals. A draft with any warning or too much overlap is rewritten (up to 3 tries);
+ * if it still isn't clean it is skipped and logged, never sent. Clean drafts send right away.
+ * Approval mode: the draft waits in Approvals.
+ */
+async function queueEmail(p, contact, makeDraft, { kind, attach, threadId = null }) {
+  const auto = !!p.auto_send;
+  if (auto && !p.sending_enabled) return { waiting: 'Sending is off until you confirm the old ChatGPT automation is turned off (Career Office).' };
+  let draft = await makeDraft();
+  for (let i = 0; auto && i < 2 && (draft.problems.length || draft.score > MAX_OVERLAP); i++) draft = await makeDraft();
+  const clean = !draft.problems.length && draft.score <= MAX_OVERLAP;
   const { data: m } = await db.from('career_messages').insert({ contact_id: contact.id, direction: 'out', kind, subject: draft.subject, body: draft.text, to_email: contact.email,
-    status: 'pending_approval', attachment: attach ? (p.resume_filename || 'Resume.pdf') : null, similarity: Math.round(draft.score * 100) / 100, thread_id: threadId }).select().single();
-  if (p.auto_send && p.sending_enabled && !draft.problems.length && draft.score <= MAX_OVERLAP) {
-    try { await sendCareerMessage(m.id); return { sent: true, id: m.id }; } catch (e) { if (!e.capped && !e.retryable) throw e; }
+    status: auto ? (clean ? 'draft' : 'skipped') : 'pending_approval', note: auto && !clean ? `Not sent: ${[...draft.problems, draft.score > MAX_OVERLAP ? 'too similar to an earlier email' : null].filter(Boolean).join('; ')}` : null,
+    attachment: attach ? (p.resume_filename || 'Resume.pdf') : null, similarity: Math.round(draft.score * 100) / 100, thread_id: threadId }).select().single();
+  if (auto) {
+    if (!clean) return { skipped: m.note, id: m.id, subject: draft.subject };
+    try { const r = await sendCareerMessage(m.id); return { sent: !!r.sent, id: m.id, subject: draft.subject, ...(r.skipped ? { skipped: r.skipped } : {}) }; }
+    catch (e) { await db.from('career_messages').update({ status: 'skipped', note: `Not sent: ${e.message.slice(0, 200)}` }).eq('id', m.id); if (!e.capped && !e.retryable) throw e; return { skipped: e.message, id: m.id, subject: draft.subject }; }
   }
   const a = await requestApproval({ agentId: 'career', kind: 'career_email', division: 'career', title: `${kind === 'follow_up' ? 'Follow-up' : 'Email'} to ${contact.name} (${contact.company})`,
     payload: { message_id: m.id, to: contact.email, from: p.sender_email, subject: draft.subject, body: draft.text, attachment: m.attachment },
@@ -208,7 +222,7 @@ async function queueEmail(p, contact, draft, { kind, attach, threadId = null }) 
     evidence: { similarity_to_earlier_emails: `${Math.round(draft.score * 100)}%`, flags: draft.problems, profile: contact.profile_source_url || contact.linkedin_url || null },
     reversible: false, expiresInHours: 96 });
   await db.from('career_messages').update({ approval_id: a.id }).eq('id', m.id);
-  return { approval: a.id, id: m.id };
+  return { approval: a.id, id: m.id, subject: draft.subject };
 }
 
 // ---------------------------------------------------------------- replies, bounces, opt-outs
@@ -254,7 +268,7 @@ export const handlers = {
     const rr = await checkReplies(); report.replies = rr.replies; if (rr.error) report.waiting.push(rr.error);
     const cap = Math.max(0, (p.daily_cap || 5) - await sentToday());
     let budget = cap;
-    const { data: pend } = await db.from('career_messages').select('contact_id').eq('status', 'pending_approval');
+    const { data: pend } = await db.from('career_messages').select('contact_id').in('status', ['pending_approval', 'draft']);
     const pending = new Set((pend || []).map((x) => x.contact_id));
 
     // 1) Follow-ups due (one per contact, ever).
@@ -263,11 +277,11 @@ export const handlers = {
       if (budget <= 0) break;
       const { data: c } = await db.from('career_contacts').select('*').eq('id', m.contact_id).single();
       if (!c || c.status !== 'contacted' || pending.has(c.id)) continue;
-      const { data: already } = await db.from('career_messages').select('id').eq('contact_id', c.id).eq('kind', 'follow_up').limit(1);
+      const { data: already } = await db.from('career_messages').select('id').eq('contact_id', c.id).eq('kind', 'follow_up').in('status', ['sent', 'pending_approval', 'draft']).limit(1);
       if (already?.length) continue;
-      const d = await writeEmail(p, c, 'follow_up', { previous: m, attach: false });
-      const q = await queueEmail(p, c, d, { kind: 'follow_up', attach: false, threadId: m.thread_id || c.thread_id });
-      report.followups.push({ to: c.name, company: c.company, subject: d.subject, ...q }); budget--;
+      const q = await queueEmail(p, c, () => writeEmail(p, c, 'follow_up', { previous: m, attach: false }), { kind: 'follow_up', attach: false, threadId: m.thread_id || c.thread_id });
+      if (q.waiting) { report.waiting.push(q.waiting); break; }
+      report.followups.push({ to: c.name, company: c.company, ...q }); if (q.sent || q.approval) budget--;
     }
 
     // 2) New outreach to verified contacts: one person per company per run (more for companies you named).
@@ -285,10 +299,10 @@ export const handlers = {
       await db.from('career_contacts').update({ email_verified: v.verified, last_verified_at: now(), notes: v.verified ? c.notes : `${c.notes ? `${c.notes} · ` : ''}Email not verified: ${v.why}` }).eq('id', c.id);
       if (!v.verified) { report.waiting.push(`${c.name} (${c.company}): email not verified (${v.why})`); continue; }
       const job = (jobs || []).find((j) => j.id === c.job_id) || null;
-      const d = await writeEmail(p, c, 'intro', { job, attach: !!p.resume_path });
-      const q = await queueEmail(p, c, d, { kind: 'intro', attach: !!p.resume_path });
-      report.intros.push({ to: c.name, company: c.company, subject: d.subject, similarity: d.score, flags: d.problems, ...q });
-      perCo[c.company] = (perCo[c.company] || 0) + 1; budget--;
+      const q = await queueEmail(p, c, () => writeEmail(p, c, 'intro', { job, attach: !!p.resume_path }), { kind: 'intro', attach: !!p.resume_path });
+      if (q.waiting) { if (!report.waiting.includes(q.waiting)) report.waiting.push(q.waiting); break; }
+      report.intros.push({ to: c.name, company: c.company, ...q });
+      perCo[c.company] = (perCo[c.company] || 0) + 1; if (q.sent || q.approval) budget--;
     }
 
     // 3) People reachable only on LinkedIn: a short, unique note for you to send yourself (up to 3 a day).
@@ -313,8 +327,8 @@ export const handlers = {
 
     const md = [`**Career run · ${report.date}**`, '',
       `- Replies noticed: ${report.replies}`,
-      `- Follow-ups prepared: ${report.followups.length}${report.followups.map((x) => `\n  - ${x.to} (${x.company}): "${x.subject}"${x.sent ? ' — sent' : ' — waiting for your approval'}`).join('')}`,
-      `- New emails prepared: ${report.intros.length}${report.intros.map((x) => `\n  - ${x.to} (${x.company}): "${x.subject}"${x.sent ? ' — sent' : ' — waiting for your approval'}${x.flags?.length ? ` ⚠ ${x.flags.join('; ')}` : ''}`).join('')}`,
+      `- Follow-ups prepared: ${report.followups.length}${report.followups.map((x) => `\n  - ${x.to} (${x.company}): "${x.subject}"${x.sent ? ' — sent' : x.skipped ? ` — not sent (${x.skipped})` : ' — waiting for your approval'}`).join('')}`,
+      `- New emails prepared: ${report.intros.length}${report.intros.map((x) => `\n  - ${x.to} (${x.company}): "${x.subject}"${x.sent ? ' — sent' : x.skipped ? ` — not sent (${x.skipped})` : ' — waiting for your approval'}`).join('')}`,
       `- LinkedIn notes for you to send: ${report.notes.length}${report.notes.map((x) => `\n  - ${x.to} (${x.company})`).join('')}`,
       `- Application packets prepared: ${report.packets.length}${report.packets.map((x) => `\n  - ${x}`).join('')}`,
       report.research ? `- Contact research: ${report.research.company} (${report.research.added ?? 0} added, ${report.research.verified ?? 0} with a verified email)` : '',

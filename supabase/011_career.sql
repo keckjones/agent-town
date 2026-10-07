@@ -29,7 +29,7 @@ create table if not exists career_profile (
   daily_cap         integer not null default 5,                   -- outreach + follow-ups per weekday
   follow_up_business_days integer not null default 7,
   sending_enabled   boolean not null default false,               -- you confirm the old ChatGPT automation is off
-  auto_send         boolean not null default false,               -- false: each email waits in Approvals
+  auto_send         boolean not null default true,                -- true: fully automatic (flagged drafts are rewritten or skipped, never sent); false: each email waits in Approvals
   multi_contact_companies text[] not null default '{}',           -- companies where several people may be contacted (e.g. Charles Schwab)
   answers           jsonb not null default '{}',                  -- your answers for applications (authorization, start date, relocation, salary…)
   state             jsonb not null default '{}',                  -- agent bookkeeping (last contact research per company…)
@@ -46,6 +46,7 @@ create table if not exists career_jobs (
   track              text,                                      -- investment_banking | investment_analyst | supply_chain
   status             text not null default 'saved',             -- saved | reviewing | packet_ready | filled | submitted | interview | offer | rejected | closed | skipped
   posting_status     text not null default 'unverified',        -- unverified | open | closed (you or the agent confirmed)
+  apply_url          text,                                      -- the employer's own application page, when found
   posting_text       text,                                      -- paste the job description here for the best packet
   fit                jsonb,                                     -- { score, strengths[], gaps[], summary }
   packet             jsonb,                                     -- { why_company, cover_note, answers[], owner_questions[] }
@@ -93,7 +94,8 @@ create table if not exists career_messages (
   gmail_id        text,
   thread_id       text,
   attachment      text,                              -- file name attached, if any
-  similarity      numeric,                           -- highest overlap with any earlier email (0-1); kept low on purpose
+  similarity      numeric,
+  note            text,                              -- why it wasn't sent (automatic mode never sends a flagged email)                           -- highest overlap with any earlier email (0-1); kept low on purpose
   approval_id     bigint,
   follow_up_due   date,
   sent_at         timestamptz,
@@ -122,3 +124,6 @@ insert into career_profile (id) values (1) on conflict (id) do nothing;
 alter table career_profile add column if not exists multi_contact_companies text[] not null default '{}';
 alter table career_profile add column if not exists state jsonb not null default '{}';
 alter table career_profile add column if not exists answers jsonb not null default '{}';
+alter table career_messages add column if not exists note text;
+alter table career_jobs add column if not exists apply_url text;
+alter table career_profile alter column auto_send set default true;

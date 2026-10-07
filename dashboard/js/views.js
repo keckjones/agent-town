@@ -542,6 +542,87 @@ export function warRoomPanel(S, ui) {
   ].join('');
 }
 
+// ---------------------------------------------------------------- Career Office (personal job search)
+const TRACK = { investment_banking: 'Investment banking', investment_analyst: 'Investment analyst', supply_chain: 'Supply chain' };
+const JOB_STATUS = { saved: 'Saved', reviewing: 'Preparing packet…', packet_ready: 'Packet ready', filled: 'Filled out (not submitted)', submitted: 'Submitted', interview: 'Interview', offer: 'Offer', rejected: 'Rejected', closed: 'Posting closed', skipped: 'Skipped' };
+const CONTACT_STATUS = { new: 'Not contacted', contacted: 'Emailed', followed_up: 'Followed up', replied: 'Replied', declined: 'Declined', opted_out: 'Opted out', bounced: 'Bounced', do_not_contact: 'Do not contact' };
+export function careerPanel(S, ui) {
+  if (S.missing?.has?.('career_profile')) return `<div class="card warn">Run <b>supabase/011_career.sql</b> in the Supabase SQL Editor, then your private career setup file.</div>`;
+  const p = S.t('career_profile')[0] || {};
+  const jobs = S.t('career_jobs'), contacts = S.t('career_contacts'), msgs = S.t('career_messages');
+  const mail = S.t('integrations').find((i) => i.id === 'career_mail');
+  const pub = S.t('integrations').find((i) => i.id === 'public_url' && i.status === 'connected')?.detail;
+  const tab = ['jobs', 'contacts', 'sent', 'setup'].includes(ui.filter) ? ui.filter : 'today';
+  const out = msgs.filter((m) => m.direction === 'out');
+  const sent = out.filter((m) => m.status === 'sent');
+  const weekAgo = Date.now() - 7 * 864e5;
+  const notes = out.filter((m) => m.kind === 'linkedin_note' && m.status === 'to_send_by_you');
+  const waiting = out.filter((m) => m.status === 'pending_approval');
+  const cName = (id) => contacts.find((c) => c.id === id);
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  const dueSoon = sent.filter((m) => m.kind === 'intro' && m.follow_up_due && ['contacted'].includes(cName(m.contact_id)?.status)).sort((a, b) => String(a.follow_up_due).localeCompare(String(b.follow_up_due)));
+  const steps = [
+    ['Your details and resume text loaded', !!p.resume_text, 'Run the private career setup file (career_setup.sql) in the Supabase SQL Editor.'],
+    ['Resume PDF uploaded (attached to new emails)', !!p.resume_path, `<label class="btn sm">Upload resume PDF<input type="file" accept="application/pdf" data-act-change="career-resume" hidden></label>`],
+    [`School Gmail connected (${esc(p.sender_email || 'keckjones@tamu.edu')})`, mail?.status === 'connected', pub ? `<a class="btn sm gold" href="${esc(pub.replace(/\/$/, ''))}/oauth/gmail/start?acct=career" target="_blank" rel="noopener">Connect school Gmail →</a> <span class="meta">Sign in as ${esc(p.sender_email || 'keckjones@tamu.edu')}; allow "Send" and "Read". Any other account is refused.</span>` : '<span class="meta">Needs the worker address (Connections & Settings).</span>'],
+    ['Old ChatGPT “Keck Career Outreach” automation turned off', !!p.sending_enabled, `<button class="btn sm" data-act="career-sending" data-on="1">I turned it off — let this agent send</button>`],
+  ];
+  const setupDone = steps.every((x) => x[1]);
+  const setup = `<div class="card"><h4>Setup ${setupDone ? chip('Ready', 'ok') : chip(`${steps.filter((x) => x[1]).length}/${steps.length}`, 'warn')}</h4>
+    <ul class="checklist">${steps.map(([t, ok, fix]) => `<li class="${ok ? 'ok' : ''}"><span>${ok ? '✓' : '○'} ${t}</span>${ok ? '' : `<div>${fix}</div>`}</li>`).join('')}</ul>
+    <div class="row" style="margin-top:8px"><label class="f inline"><input type="checkbox" data-act-change="career-auto" ${p.auto_send ? 'checked' : ''} ${p.sending_enabled ? '' : 'disabled'}> Send automatically (skip approving each email)</label>
+    <span class="meta">Off = every email waits in Approvals so you can read it first. Even when on, an email with any warning still waits for you. Daily limit: ${esc(p.daily_cap || 5)} emails (new + follow-ups). One follow-up after ${esc(p.follow_up_business_days || 7)} business days.</span></div>
+    ${p.sending_enabled ? `<button class="btn sm" data-act="career-sending" data-on="0">Pause career sending</button>` : ''}</div>`;
+  const tabs = `<div class="row">${[['today', 'Today'], ['jobs', `Saved jobs (${jobs.length})`], ['contacts', `Contacts (${contacts.length})`], ['sent', `Emails (${sent.length})`], ['setup', 'Setup']].map(([k, l]) => `<button class="btn sm ${tab === k ? 'primary' : ''}" data-act="filter" data-id="${k === 'today' ? '' : k}">${l}</button>`).join('')}</div>`;
+  const questions = [...new Set(jobs.filter((j) => j.packet?.owner_questions).flatMap((j) => j.packet.owner_questions))];
+
+  const jobCard = (j) => `<details class="card" ${ui.sub?.job === j.id ? 'open' : ''}><summary class="row between" style="cursor:pointer"><div><b>${esc(j.company)}</b> · ${esc(j.title)}<div class="meta">${esc(j.location || '')}${j.track ? ` · ${esc(TRACK[j.track] || j.track)}` : ''} · posting ${esc(j.posting_status)}${j.fit?.score ? ` · fit ${esc(j.fit.score)}/10` : ''}</div></div>${chip(JOB_STATUS[j.status] || j.status, ['submitted', 'interview', 'offer'].includes(j.status) ? 'ok' : j.status === 'packet_ready' || j.status === 'filled' ? 'warn' : '')}</summary>
+    <div class="row">${j.url ? `<a class="btn sm" href="${esc(j.url)}" target="_blank" rel="noopener">Open posting ↗</a>` : ''}<button class="btn sm" data-act="career-review" data-id="${j.id}">${j.packet ? 'Redo packet' : 'Prepare packet'}</button>
+      <select class="i sm" data-act-change="career-job-status" data-id="${j.id}">${Object.entries(JOB_STATUS).map(([k, l]) => `<option value="${k}" ${j.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    ${j.fit ? `<p>${esc(j.fit.summary || '')}</p>${j.fit.strengths?.length ? `<h4>Strengths</h4><ul>${j.fit.strengths.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}${j.fit.gaps?.length ? `<h4>Gaps to know about</h4><ul class="warnlist">${j.fit.gaps.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}` : ''}
+    ${j.packet ? `<h4>Why ${esc(j.company)}</h4><p>${esc(j.packet.why_company || '')} <button class="lnk" data-act="copy" data-text="${esc(j.packet.why_company || '')}">copy</button></p>
+      ${j.packet.cover_note ? `<h4>Cover note</h4><pre class="note">${esc(j.packet.cover_note)}</pre><button class="btn sm" data-act="copy" data-text="${esc(j.packet.cover_note)}">Copy cover note</button>` : ''}
+      ${(j.packet.answers || []).length ? `<h4>Prepared answers</h4>${j.packet.answers.map((x) => `<div class="qa"><b>${esc(x.q)}</b><p>${esc(x.a)}</p><button class="lnk" data-act="copy" data-text="${esc(x.a)}">copy</button></div>`).join('')}` : ''}
+      ${(j.packet.owner_questions || []).length ? `<h4>Only you can answer</h4><ul>${j.packet.owner_questions.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      ${(j.packet.next_steps || []).length ? `<h4>Next steps</h4><ul>${j.packet.next_steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}` : ''}
+    <form data-form="career-posting" data-id="${j.id}"><label class="f">Paste the job description (makes the packet much more specific)<textarea class="i" id="cp-${j.id}" rows="4">${esc(j.posting_text || '')}</textarea></label><button class="btn sm">Save & redo packet</button></form>
+  </details>`;
+
+  const contactRow = (c) => `<div class="card"><div class="row between"><div><b>${esc(c.name)}</b> · ${esc(c.title || '')} · ${esc(c.company)}<div class="meta">${esc(c.location || '')}
+    ${c.email ? ` · ${esc(c.email)} ${c.email_verified ? chip(`verified: ${c.email_source === 'owner' ? 'you gave it' : c.email_source === 'reply' ? 'they emailed you' : 'on public page'}`, 'ok') : chip('not verified (won\'t be emailed)', 'warn')}` : c.channel === 'linkedin' ? ` · ${chip('LinkedIn only', '')}` : ' · no verified channel yet'}
+    ${c.profile_source_url ? ` · <a href="${esc(c.profile_source_url)}" target="_blank" rel="noopener">role source ↗</a>` : ''}${c.linkedin_url ? ` · <a href="${esc(c.linkedin_url)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ''}${c.email_source_url ? ` · <a href="${esc(c.email_source_url)}" target="_blank" rel="noopener">email source ↗</a>` : ''}</div>
+    ${c.notes ? `<div class="meta">${esc(c.notes)}</div>` : ''}</div>${chip(CONTACT_STATUS[c.status] || c.status, c.status === 'replied' ? 'ok' : ['bounced', 'declined', 'opted_out', 'do_not_contact'].includes(c.status) ? 'bad' : '')}</div>
+    <div class="row">${c.status !== 'do_not_contact' ? `<button class="btn sm" data-act="career-contact-status" data-id="${c.id}" data-status="do_not_contact">Don't contact</button>` : `<button class="btn sm" data-act="career-contact-status" data-id="${c.id}" data-status="new">Allow again</button>`}
+    ${['contacted', 'followed_up'].includes(c.status) ? `<button class="btn sm" data-act="career-contact-status" data-id="${c.id}" data-status="replied">They replied</button>` : ''}</div></div>`;
+
+  const msgRow = (m) => { const c = cName(m.contact_id); return `<details class="card"><summary class="row between" style="cursor:pointer"><div><b>${esc(m.direction === 'in' ? `From ${c?.name || '?'}` : `To ${c?.name || m.to_email || '?'}`)}</b> · ${esc(c?.company || '')}<div class="meta">${esc(m.kind.replace('_', ' '))} · ${m.sent_at ? ct(m.sent_at) : esc(m.status)}${m.via ? ` · via ${esc(m.via === 'gmail_api' ? 'your school Gmail' : m.via)}` : ''}${m.attachment ? ` · 📎 ${esc(m.attachment)}` : ''}${m.follow_up_due && m.direction === 'out' ? ` · follow-up due ${esc(m.follow_up_due)}` : ''}${m.similarity != null && m.direction === 'out' ? ` · ${Math.round(m.similarity * 100)}% overlap with earlier emails` : ''}</div></div>${chip(m.status === 'sent' ? (m.direction === 'in' ? m.kind : 'Sent') : m.status.replace(/_/g, ' '), m.status === 'sent' ? 'ok' : '')}</summary>
+    ${m.subject ? `<div><b>Subject:</b> ${esc(m.subject)}</div>` : ''}<pre class="note">${esc(m.body || '')}</pre></details>`; };
+
+  const today = [
+    questions.length ? `<div class="card"><h4>Questions only you can answer (for applications)</h4><ul>${questions.slice(0, 12).map((q) => `<li>${esc(q)}</li>`).join('')}</ul><p class="meta">The agent never guesses these or certifies anything for you. Answer them on the application itself, or tell me and I'll store the answers.</p></div>` : '',
+    waiting.length ? `<div class="card"><h4>Emails waiting for your OK (${waiting.length})</h4>${waiting.map((m) => `<div class="meta">To ${esc(cName(m.contact_id)?.name || m.to_email)} · “${esc(m.subject)}”</div>`).join('')}<button class="btn sm primary" data-act="goto" data-id="approvals">Open Approvals</button></div>` : '',
+    notes.length ? section(`LinkedIn notes for you to send (${notes.length})`, notes.map((m) => { const c = cName(m.contact_id); return `<div class="card"><b>${esc(c?.name || '')}</b> · ${esc(c?.title || '')} · ${esc(c?.company || '')}<pre class="note">${esc(m.body)}</pre>
+      <div class="row"><button class="btn sm" data-act="copy" data-text="${esc(m.body)}">Copy note</button>${c?.linkedin_url ? `<a class="btn sm" href="${esc(c.linkedin_url)}" target="_blank" rel="noopener">Open their LinkedIn ↗</a>` : ''}<button class="btn sm primary" data-act="career-note-sent" data-id="${m.id}">I sent it</button><button class="btn sm" data-act="career-note-skip" data-id="${m.id}">Skip</button></div></div>`; }).join('')) : '',
+    dueSoon.length ? section('Follow-ups scheduled', `<ul class="src">${dueSoon.slice(0, 10).map((m) => `<li>${esc(cName(m.contact_id)?.name || '')} (${esc(cName(m.contact_id)?.company || '')}) · “${esc(m.subject)}” · ${m.follow_up_due <= todayStr ? '<b>due now</b>' : `due ${esc(m.follow_up_due)}`}</li>`).join('')}</ul><p class="meta">Only one follow-up per person, and only if they haven't replied.</p>`) : '',
+    !questions.length && !waiting.length && !notes.length && !dueSoon.length ? '<p class="muted">Nothing needs you right now.</p>' : '',
+  ].join('');
+
+  return [
+    `<div class="plain"><b>In plain English:</b> this desk runs your job search. Every weekday at 8:00 it checks your school Gmail for replies, prepares at most one follow-up for anyone who hasn't answered after ${esc(p.follow_up_business_days || 7)} business days, writes new emails to people whose address is <i>verified</i> (you gave it, they emailed you, or it's printed on a public page it re-checks; it never guesses addresses), and prepares application packets for your saved jobs. Every email is written for that one person and checked against all earlier emails so no two read the same. Emails come only from ${esc(p.sender_email || 'keckjones@tamu.edu')}. People it can only reach on LinkedIn get a short note for <i>you</i> to send; it never logs into LinkedIn or submits an application for you.</div>`,
+    `<div class="kpis">${kpi('Emails sent (7d)', sent.filter((m) => m.direction === 'out' && new Date(m.sent_at) > weekAgo).length)}${kpi('Replies', msgs.filter((m) => m.direction === 'in' && m.kind === 'reply').length)}${kpi('Waiting for you', waiting.length + notes.length)}${kpi('Packets ready', jobs.filter((j) => j.status === 'packet_ready').length)}${kpi('Applications submitted', jobs.filter((j) => ['submitted', 'interview', 'offer'].includes(j.status)).length)}</div>`,
+    `<div class="row"><button class="btn sm primary" data-act="career-run">Run the morning routine now</button><button class="btn sm" data-act="career-replies">Check for replies</button></div>`,
+    setupDone ? '' : setup,
+    tabs,
+    tab === 'today' ? today : '',
+    tab === 'jobs' ? jobs.slice().sort((a, b) => (b.fit?.score || 0) - (a.fit?.score || 0)).map(jobCard).join('') + `<form class="card" data-form="career-add-job"><h4>Add a job</h4><div class="grid2"><input class="i" id="cj-company" placeholder="Company"><input class="i" id="cj-title" placeholder="Job title"><input class="i" id="cj-location" placeholder="City, ST"><input class="i" id="cj-url" placeholder="Link (LinkedIn or company site)"></div><button class="btn sm">Add</button></form>` : '',
+    tab === 'contacts' ? `<form class="card" data-form="career-find"><h4>Research people at a company</h4><div class="row"><input class="i" id="cf-company" placeholder="e.g. Charles Schwab (Westlake)"><input class="i" id="cf-focus" placeholder="Focus (optional), e.g. campus recruiting, branch leadership"><button class="btn sm">Research</button></div><p class="meta">Uses web search. Emails are kept only if they appear on a public page it re-checks.</p></form>
+      ${contacts.slice().sort((a, b) => a.priority - b.priority || a.company.localeCompare(b.company)).map(contactRow).join('') || '<p class="muted">No contacts yet.</p>'}
+      <form class="card" data-form="career-add-contact"><h4>Add someone you know or found</h4><div class="grid2"><input class="i" id="cc-name" placeholder="Name"><input class="i" id="cc-title" placeholder="Title"><input class="i" id="cc-company" placeholder="Company"><input class="i" id="cc-email" placeholder="Email (optional)"><input class="i" id="cc-src" placeholder="Where the email is shown (link) — leave empty if they gave it to you"><input class="i" id="cc-li" placeholder="LinkedIn profile link (optional)"></div><input class="i" id="cc-notes" placeholder="How you know them (e.g. met at the career fair) — only true facts"><button class="btn sm">Add</button></form>` : '',
+    tab === 'sent' ? (msgs.filter((m) => m.status === 'sent' || m.direction === 'in').sort((a, b) => String(b.sent_at || b.created_at).localeCompare(String(a.sent_at || a.created_at))).map(msgRow).join('') || '<p class="muted">Nothing sent yet.</p>') : '',
+    tab === 'setup' ? setup : '',
+  ].join('');
+}
+
 export const VIEWS = {
   desk: { name: (S, ui) => S.t('agents').find((a) => a.id === ui.sub?.agent)?.name || 'Agent', accent: '#3aa0ff', render: deskPanel },
   record: { name: (S, ui) => { const [t, i] = String(ui.sub?.ref || '').split(':'); return `${({ approval: 'Approval', workflow: 'Workflow', task: 'Task', event: 'Event', order: 'Order', content: 'Content', ledger: 'Ledger entry', document: 'Document', call: 'Call', prospect: 'Lead', deal: 'Deal', deadline: 'Deadline', brand: 'Brand', product: 'Product', opportunity: 'Opportunity' })[t] || 'Record'} #${i || ''}`; }, accent: '#8592a5', render: recordPanel },
@@ -557,4 +638,5 @@ export const VIEWS = {
   team: { name: () => 'Projects & Team Requests', accent: '#f2c14e', render: teamPanel },
   links: { name: () => 'Live Links & Analytics', accent: '#7be0a8', render: linksPanel },
   warroom: { name: () => 'War Room · Morning Meeting', accent: '#f2c14e', render: warRoomPanel },
+  career: { name: () => 'Career Office', accent: '#9fd3ff', render: careerPanel },
 };

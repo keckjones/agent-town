@@ -22,6 +22,17 @@ async function finish(id, status, result) {
 }
 
 const executors = {
+  // Career email: sent from your school Gmail exactly as approved (subject/body), only to the verified address on file.
+  async career_email(a) {
+    const { sendCareerMessage } = await import('./agents/career.js');
+    const { data: m } = await db.from('career_messages').select('*').eq('id', a.payload.message_id).single();
+    if (!m) return finish(a.id, 'failed', { error: 'Message record not found' });
+    if (String(a.payload.to || '').toLowerCase() !== String(m.to_email || '').toLowerCase()) return finish(a.id, 'held', { note: 'The address was changed on the card. Career emails only go to the verified address on file; edit the contact instead.' });
+    await db.from('career_messages').update({ subject: a.payload.subject, body: a.payload.body }).eq('id', m.id).neq('status', 'sent');
+    const r = await sendCareerMessage(m.id, { approvalId: a.id });
+    if (r.skipped) return finish(a.id, 'held', { note: `Not sent: ${r.skipped}` });
+    await finish(a.id, 'executed', { sent_to: a.payload.to, from: a.payload.from });
+  },
   async email(a) {
     const p = a.prospect_id ? must(await db.from('prospects').select('*').eq('id', a.prospect_id).single()) : null;
     const { to, subject, body, attachment } = a.payload;

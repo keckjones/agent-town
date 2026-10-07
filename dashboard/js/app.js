@@ -84,7 +84,7 @@ function renderRail() {
     const badge = id === 'approvals' && need ? `<span class="badge">${need}</span>` : id === 'monitor' && blocked ? `<span class="badge red">${blocked}</span>`
       : s.division && paused.has(s.division) ? '<span class="chip warn">paused</span>' : w?.blocked ? `<span class="badge red">${w.blocked}</span>` : w?.working ? `<span class="wk">▶${w.working}</span>` : s.key ? `<span class="key">${s.key.toUpperCase()}</span>` : '';
     return `<button class="station-btn" data-act="goto" data-id="${id}" style="--accent:${s.accent}" aria-current="${ui.station === id}"><span class="glyph"></span><span>${esc(s.name)}</span>${badge}</button>`; }).join('')}`;
-  $('#rail').innerHTML = group('Command', ['overview', 'warroom', 'team', 'links', 'approvals', 'monitor', 'timeline']) + group('Businesses', ['agency', 'sports', 'etsy', 'dropship', 'realestate', 'media']) + group('Operations', ['ventures', 'customers', 'finance', 'hq', 'setup']);
+  $('#rail').innerHTML = group('Command', ['overview', 'warroom', 'team', 'links', 'approvals', 'monitor', 'timeline']) + group('Businesses', ['agency', 'sports', 'etsy', 'dropship', 'realestate', 'media']) + group('Operations', ['ventures', 'customers', 'finance', 'hq', 'setup']) + group('You', ['career']);
 }
 
 // Weekly earnings goal: money actually collected since Monday (confirmed payments only), against the goal you set.
@@ -134,6 +134,7 @@ function migrationsNeeded() {
   if (S.missing.has('work_requests')) out.push('007_collaboration.sql');
   if (S.missing.has('published_links')) out.push('009_links_analytics.sql');
   if (S.missing.has('meetings')) out.push('010_war_room.sql');
+  if (S.missing.has('career_profile')) out.push('011_career.sql');
   return out;
 }
 function renderMigrate() {
@@ -566,6 +567,24 @@ const ACTIONS = {
     if (a.type === 'start_project') { const p = await S.insert('team_projects', { title: String(a.idea || '').slice(0, 80), idea: String(a.idea || ''), source: 'owner' }); await S.command('plan_idea', { project_id: p.id }); if (!S.demo) toast('The Big Boss is planning it now (usually 10–20 seconds).'); go('team'); return; }
   },
   async 'check-integrations'() { await S.command('check_integrations'); if (!S.demo) toast('Re-checking connections'); },
+  // ---- Career Office
+  async 'career-run'() { await S.runTask('career', 'daily_run', {}); if (!S.demo) toast('Running the job-search routine (about a minute).'); },
+  async 'career-replies'() { await S.runTask('career', 'check_replies', {}); if (!S.demo) toast('Checking your school Gmail for replies…'); },
+  async 'career-review'(d) { await S.update('career_jobs', { id: Number(d.id) }, { status: 'reviewing' }); await S.runTask('career', 'review_job', { job_id: Number(d.id) }); if (!S.demo) toast('Preparing the application packet (20–40 seconds).'); },
+  async 'career-sending'(d) {
+    const on = d.on === '1';
+    if (on && !confirm('Before turning this on: is the ChatGPT "Keck Career Outreach" automation turned OFF? Two systems emailing the same people would send duplicates.')) return;
+    await S.update('career_profile', { id: 1 }, { sending_enabled: on, ...(on ? {} : { auto_send: false }) });
+    if (!S.demo) toast(on ? 'Career sending is on. Each email still waits for your OK unless you turn on automatic sending.' : 'Career sending paused.');
+  },
+  async 'career-note-sent'(d) {
+    const m = S.t('career_messages').find((x) => x.id === Number(d.id)); if (!m) return;
+    await S.update('career_messages', { id: m.id }, { status: 'sent', via: 'you', sent_at: new Date().toISOString() });
+    await S.update('career_contacts', { id: m.contact_id }, { status: 'contacted', updated_at: new Date().toISOString() });
+    if (!S.demo) toast('Recorded as sent on LinkedIn.');
+  },
+  async 'career-note-skip'(d) { await S.update('career_messages', { id: Number(d.id) }, { status: 'skipped' }); },
+  async 'career-contact-status'(d) { await S.update('career_contacts', { id: Number(d.id) }, { status: d.status, updated_at: new Date().toISOString() }); },
   async 'meeting-now'() {
     if (S.demo) { S.startMeeting?.(); return; }
     await S.command('run_task', { agent: 'manager', kind: 'morning_meeting', input: { force: true } });
@@ -672,7 +691,43 @@ const MODALS = {
   },
 };
 
+const CHANGE = {
+  async 'career-auto'(t) { await S.update('career_profile', { id: 1 }, { auto_send: t.checked }); if (!S.demo) toast(t.checked ? 'Emails without warnings will send automatically (daily limit applies).' : 'Every email will wait for your OK.'); },
+  async 'career-job-status'(t) { const st = t.value; await S.update('career_jobs', { id: Number(t.dataset.id) }, { status: st, ...(st === 'submitted' ? { applied_at: new Date().toISOString() } : {}), updated_at: new Date().toISOString() }); },
+  async 'career-resume'(t) {
+    const file = t.files?.[0]; if (!file) return;
+    if (file.type !== 'application/pdf') throw new Error('Please choose a PDF.');
+    if (file.size > 5e6) throw new Error('That file is over 5 MB.');
+    await S.upload('career/resume.pdf', file, 'application/pdf');
+    await S.update('career_profile', { id: 1 }, { resume_path: 'career/resume.pdf', resume_filename: file.name });
+    if (!S.demo) toast(`Uploaded ${file.name}. New emails will attach it.`);
+  },
+};
 const FORMS = {
+  async 'career-posting'(f) {
+    const id = Number(f.dataset.id); const text = val(`cp-${id}`, f);
+    await S.update('career_jobs', { id }, { posting_text: text || null, status: 'reviewing' });
+    await S.runTask('career', 'review_job', { job_id: id }); if (!S.demo) toast('Saved. Redoing the packet with the full description…');
+  },
+  async 'career-add-job'(f) {
+    const company = val('cj-company', f), title = val('cj-title', f);
+    if (!company || !title) throw new Error('Company and job title are needed.');
+    const j = await S.insert('career_jobs', { company, title, location: val('cj-location', f) || null, url: val('cj-url', f) || null, source: 'owner' });
+    await S.runTask('career', 'review_job', { job_id: j.id }); f.reset(); if (!S.demo) toast('Added. Preparing its packet…');
+  },
+  async 'career-find'(f) {
+    const company = val('cf-company', f); if (!company) throw new Error('Type a company name.');
+    await S.runTask('career', 'find_contacts', { company, focus: val('cf-focus', f) || undefined }); f.reset(); if (!S.demo) toast(`Researching people at ${company} (about a minute).`);
+  },
+  async 'career-add-contact'(f) {
+    const name = val('cc-name', f), company = val('cc-company', f), email = val('cc-email', f).toLowerCase(), src = val('cc-src', f), li = val('cc-li', f);
+    if (!name || !company) throw new Error('Name and company are needed.');
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('That email address doesn\'t look right.');
+    if (src && !/^https?:\/\//.test(src)) throw new Error('The source should be a full link (https://…).');
+    await S.insert('career_contacts', { name, company, title: val('cc-title', f) || null, email: email || null, email_source: email ? (src ? 'page' : 'owner') : null, email_source_url: src || null,
+      email_verified: !!email && !src, linkedin_url: li || null, channel: email ? 'email' : li ? 'linkedin' : 'none', notes: val('cc-notes', f) || null, priority: 3 });
+    f.reset(); if (!S.demo) toast(email ? (src ? 'Added. The agent will confirm the address appears on that page before emailing.' : 'Added. You gave the address, so it counts as verified.') : 'Added.');
+  },
   async 'ask-boss'(f) { const q = val('boss-q', f); await askBoss(q); f.reset(); },
   async 'give-idea'(f) {
     const idea = val('idea-text', f);
@@ -802,6 +857,7 @@ async function start(store) {
       else if (v === 'clear') { prefs.cams = []; savePrefs(); renderCtrl(); }
       else if (v !== '' && prefs.cams?.[Number(v)]) floor?.setCamera(prefs.cams[Number(v)].cam);
     }
+    if (t.dataset.actChange && CHANGE[t.dataset.actChange]) Promise.resolve(CHANGE[t.dataset.actChange](t)).catch((err) => toast(err.message || String(err)));
     if (t.dataset.tick !== undefined) { prefs.tick = { ...(prefs.tick || {}), [t.dataset.tick]: t.value || undefined }; savePrefs(); renderTape(); }
     if (t.dataset.mon !== undefined && t.dataset.mon !== 'q') { ui.mon = { ...ui.mon, [t.dataset.mon]: t.type === 'checkbox' ? t.checked : t.value }; renderPanel(); }
   });

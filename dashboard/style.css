@@ -320,3 +320,11 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line-2); border-bottom-wid
 .goalbar .gfill.done { background: linear-gradient(90deg, #c99a2e, #f2c14e); }
 .goalbar .gp { color: var(--text); font-weight: 600; min-width: 36px; }
 .goalbar .gr, .goalbar .gn { white-space: nowrap; } .goalbar .gn { color: var(--faint); }
+
+/* Career Office */
+.checklist { list-style: none; padding: 0; margin: 6px 0; display: grid; gap: 8px; }
+.checklist li { display: grid; gap: 4px; } .checklist li.ok span { color: var(--up); }
+.warnlist li { color: var(--gold); }
+.qa { border-left: 2px solid var(--line-2); padding: 4px 10px; margin: 6px 0; } .qa p { margin: 4px 0; }
+pre.note { white-space: pre-wrap; font: 13px/1.5 var(--body); background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+label.f.inline { display: inline-flex; align-items: center; gap: 6px; }

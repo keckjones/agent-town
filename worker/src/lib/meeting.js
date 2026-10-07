@@ -11,7 +11,7 @@ import { config } from '../config.js';
 const DEPTS = {
   agency: 'Local Website Agency', sports: 'Sports Platform Marketing', etsy: 'Etsy Commerce', dropship: 'Dropshipping Commerce',
   realestate: 'Real Estate Wholesaling', media: 'Brands, Social & Video', ventures: 'Research & New Ventures',
-  customers: 'Customer Operations', finance: 'Finance & Performance', hq: 'Risk & Workflow Improvement',
+  customers: 'Customer Operations', finance: 'Finance & Performance', hq: 'Risk & Workflow Improvement', career: 'Career Office',
 };
 const MAX_REQUESTS = 3;
 const now = () => new Date().toISOString();

@@ -2,6 +2,7 @@
 // what each approval does, and a glossary of the jargon that shows up on the floor.
 
 export const AGENT_EXPLAIN = {
+  career: 'Your personal job-search assistant. Every weekday morning it checks your school Gmail for replies, writes one-of-a-kind emails to people whose address is verified (never guessed), sends at most one follow-up, and prepares application packets for your saved jobs. Emails go out only from keckjones@tamu.edu, and it never submits an application or answers personal questions for you.',
   manager: 'The Big Boss. Every few hours it looks at everything (money, approvals waiting, what failed) and decides which agents should work on what next. It can only assign work; it can\'t spend money or approve anything for you.',
   risk: 'The safety officer. It watches deadlines, spending limits and error rates, and raises an alarm (or pauses something) when a limit is crossed.',
   improve: 'Looks for steps that keep getting stuck and suggests fixes. It only suggests; you decide.',
@@ -105,6 +106,7 @@ export const TASK_EXPLAIN = {
 };
 
 export const APPROVAL_EXPLAIN = {
+  career_email: 'Approving sends this email from your school Gmail (keckjones@tamu.edu) to the one verified address shown. You can edit the words first. If the person has replied or the address bounced since this was written, it is not sent.',
   email: 'Approving sends this one email to the business. Emails can\'t be unsent.',
   followup: 'Approving sends a follow-up email to someone who hasn\'t replied yet.',
   reply: 'Approving sends this reply to the person who wrote to us.',

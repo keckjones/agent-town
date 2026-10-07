@@ -146,6 +146,7 @@ const RUNNABLE = {
   designer: ['design_page'], caller: ['prepare_call', 'record_outcome'], marketer: ['plan_campaign'], merchant: ['build_digital_product'], qa: ['check_site'],
   ds_research: ['research_niches'], ds_store: ['build_listing'], ds_orders: ['review_order', 'sync_shopify_orders'],
   re_market: ['market_report'], re_leads: ['import_leads'], re_underwrite: ['underwrite'], re_deals: ['plan_outreach', 'prepare_offer'], re_buyers: ['match_buyers'],
+  career: ['daily_run', 'review_job', 'find_contacts', 'check_replies'],
   risk: ['check_risks'], capital: ['allocation_report'], learning: ['weekly_learning'], experiments: ['design_experiment'], improve: ['find_bottlenecks'],
   brand_dev: ['propose_brand'], strategy: ['plan_calendar'], scriptwriter: ['write_script'], creative: ['produce'], editor: ['edit'], content_qa: ['review'],
   publisher: ['publish_due'], growth: ['measure', 'evaluate_brands'], community: ['check_comments'], account_prov: ['check_accounts'],
@@ -201,7 +202,7 @@ async function processCommands() {
       else if (c.kind === 'ask_boss') result = await askBoss(c.input?.question);
       else if (c.kind === 'refresh_links') result = await refreshLinkMetrics();
       else if (c.kind === 'plan_idea') { result = await planIdea({ input: { project_id: Number(c.input?.project_id) } }); }
-      else if (c.kind === 'gmail_connect') result = { url: await gmailConnectUrl() };
+      else if (c.kind === 'gmail_connect') result = { url: await gmailConnectUrl(c.input?.account === 'career' ? 'career' : 'business') };
       else if (c.kind === 'youtube_connect') result = { url: await youtubeConnectUrl(Number(c.input.account_id)) };
       else throw new Error(`Unknown command ${c.kind}`);
       })()]);
@@ -255,6 +256,9 @@ async function main() {
 
   every(config.managerCron, 'manager', once('manager', 'plan', {}, 1));
   every(config.meetingCron, 'morning meeting', once('manager', 'morning_meeting', {}, 1));
+  // Career Office: weekday mornings at 8:00, plus an hourly check for replies during the workday.
+  every(config.careerCron, 'career run', once('career', 'daily_run', {}, 2));
+  every('40 9-18 * * 1-5', 'career replies', once('career', 'check_replies', {}, 4));
   every('* * * * *', 'approvals', approvalsJob);
   every('* * * * *', 'team requests', routeJob);
   every('* * * * *', 'commands', commandsJob, { evenWhenPaused: true });

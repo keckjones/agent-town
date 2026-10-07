@@ -70,7 +70,8 @@ function drawSign(canvas, dept, w) {
 // Departments on a 5 × 2 grid in front of the Executive Office, with the glass War Room in the middle.
 // Businesses in the back row, support teams in front.
 const GRID = { agency: [-26, -4], sports: [-13, -4], etsy: [13, -4], dropship: [26, -4], realestate: [0, -4],
-  media: [-26, 12.5], ventures: [-13, 12.5], customers: [0, 12.5], finance: [13, 12.5], hq: [26, 12.5] };
+  media: [-26, 12.5], ventures: [-13, 12.5], customers: [0, 12.5], finance: [13, 12.5], hq: [26, 12.5],
+  career: [-33.5, -15] };   // the Career Office: a private corner by the windows, left of the Executive Office
 const WAR = { x: 0, z: 4.3, w: 13, d: 6.4 };
 // Walking lanes: an aisle behind the War Room, one in front of it, and side lanes past its doors.
 const A_BACK = 0.2, A_FRONT = 8.4, LANE_X = 8.5;

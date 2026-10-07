@@ -27,6 +27,7 @@ export const DEPTS = [
   { id: 'customers',  name: 'Customer Operations',       short: 'Customers',   station: 'customers',  accent: '#7db7ff' },
   { id: 'finance',    name: 'Finance & Performance',     short: 'Finance',     station: 'finance',    accent: '#7be0a8' },
   { id: 'hq',         name: 'Risk & Workflow Improvement', short: 'Risk & Ops', station: 'overview',  accent: '#d9a441' },
+  { id: 'career',     name: 'Career Office',             short: 'Career',      station: 'career',     accent: '#9fd3ff' },
 ];
 export const deptById = Object.fromEntries(DEPTS.map((d) => [d.id, d]));
 export const deptOf = (a) => (a.id === 'manager' || String(a.id).startsWith('ceo_') ? 'exec' : deptById[a.division] ? a.division : 'hq');
@@ -48,7 +49,7 @@ export const VERBS = {
   propose_brand: 'Researching and proposing a brand', prepare_accounts: 'Preparing account setup checklists', check_accounts: 'Checking account connections',
   plan_calendar: 'Planning the content calendar', write_script: 'Researching and writing a script', produce: 'Producing a video', edit: 'Editing a video',
   package: 'Writing title and description', review: 'Quality-checking content', publish_due: 'Publishing scheduled content', measure: 'Measuring published content',
-  morning_meeting: 'Running the morning meeting in the War Room', plan_idea: 'Planning your idea with the team', build_site: 'Building a landing page',
+  morning_meeting: 'Running the morning meeting in the War Room', daily_run: 'Running the morning job-search routine', review_job: 'Preparing an application packet', find_contacts: 'Researching contacts at a company', check_replies: 'Checking for replies from employers', plan_idea: 'Planning your idea with the team', build_site: 'Building a landing page',
   check_comments: 'Reading comments', evaluate_brands: 'Checking brands against success criteria', brand_report: 'Writing a brand operating report',
 };
 
@@ -57,6 +58,7 @@ export const SCHEDULES = {
   manager: 'Morning meeting in the War Room daily 8:05 AM (MEETING_CRON); planning on MANAGER_CRON', support: 'Reads the inbox every 5 minutes', postmaster: 'Follow-up check hourly at :07',
   fulfillment: 'Order sync every 30 minutes', sports: 'Pick sync hourly at :12 (when connected)', risk: 'Risk check hourly at :20', finance: 'Morning text at the time you set',
   ds_orders: 'Tracking check every 30 minutes (when Shopify is connected)', learning: 'Mondays 6:00 AM', capital: 'Mondays 6:15 AM', improve: 'Mondays 6:30 AM',
+  career: 'Weekdays 8:00 AM job-search routine; replies checked hourly 9:40 AM–6:40 PM',
   publisher: 'Publishing check every 10 minutes', growth: 'Metrics daily 7:40 AM; brand review Mondays 6:45 AM', community: 'Comments hourly at :25', account_prov: 'Account check every 6 hours',
 };
 

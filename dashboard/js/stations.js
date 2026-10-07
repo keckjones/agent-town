@@ -17,6 +17,7 @@ export const STATIONS = [
   { id: 'customers',  key: '9', name: 'Customer Operations',       short: 'Customers',  accent: '#7db7ff', division: 'customers', dept: 'customers' },
   { id: 'finance',    key: '0', name: 'Finance & Performance',     short: 'Finance',    accent: '#7be0a8', division: 'finance', dept: 'finance' },
   { id: 'hq',         key: null, name: 'Risk & Workflow Improvement', short: 'Risk & Ops', accent: '#d9a441', division: 'hq', dept: 'hq' },
+  { id: 'career',     key: 'k', name: 'Career Office',             short: 'Career',     accent: '#9fd3ff', division: 'career', dept: 'career' },
   { id: 'setup',      key: 's', name: 'Connections & Settings',    short: 'Setup',      accent: '#8592a5', division: null },
 ];
 export const byId = Object.fromEntries(STATIONS.map((s) => [s.id, s]));

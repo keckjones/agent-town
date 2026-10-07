@@ -53,6 +53,12 @@ export async function checkIntegrations() {
     return ['connected', `Signed in as ${config.smtp.user} (sending + reply reading)`];
   });
 
+  await check('career_mail', 'Career email (school Gmail)', 'career', async () => {
+    await refreshGmailState();
+    if (config.careerGmail) return ['connected', `Career emails send from ${config.careerGmail} (and replies are read in their threads)`];
+    return ['needs_setup', gmailApiConfigured() ? 'Click "Connect school Gmail" in the Career Office and sign in as keckjones@tamu.edu.' : 'Add GOOGLE_OAUTH_CLIENT_ID/SECRET first, then click "Connect school Gmail".'];
+  });
+
   await check('public_url', 'Worker public address', 'hq', async () =>
     config.publicUrl ? ['connected', config.publicUrl] : ['needs_setup', 'Needed for SMS receipts, Stripe webhooks and Etsy sign-in']);
 

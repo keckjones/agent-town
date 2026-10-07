@@ -19,6 +19,7 @@ import { handlers as dropship } from './dropship.js';
 import { handlers as realestate } from './realestate.js';
 import { handlers as shared } from './shared.js';
 import { handlers as media } from './media.js';
+import { handlers as career } from './career.js';
 
 // agent id → { task kind → handler }
 export const registry = {
@@ -30,6 +31,7 @@ export const registry = {
   experiments: shared, learning: shared, capital: shared, risk: shared, improve: shared,
   brand_dev: media, account_prov: media, strategy: media, scriptwriter: media, creative: media, editor: media, content_qa: media,
   publisher: media, community: media, growth: media, packaging: media, monetize: media,
+  career,
 };
 
 // What each agent is doing, in plain words (shown in the live feed and the "why" panel).
@@ -37,6 +39,10 @@ export const verbs = {
   plan: 'Reviewing all divisions and assigning work',
   plan_idea: 'Planning your idea with the team',
   morning_meeting: 'Running the morning meeting in the War Room',
+  daily_run: 'Running the morning job-search routine',
+  review_job: 'Preparing an application packet',
+  find_contacts: 'Researching contacts at a company',
+  check_replies: 'Checking for replies from employers',
   build_site: 'Building a landing page',
   research: 'Researching a market question with cited sources',
   find_prospects: 'Finding local businesses',

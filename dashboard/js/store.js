@@ -56,6 +56,10 @@ const TABLES = {
   published_links: { order: ['created_at', false], limit: 500 },
   site_visits: { order: ['day', false], limit: 2000 },
   meetings: { order: ['held_on', false], limit: 14 },
+  career_profile: {},
+  career_jobs: { order: ['created_at'], limit: 300 },
+  career_contacts: { order: ['created_at'], limit: 500 },
+  career_messages: { order: ['created_at', false], limit: 500 },
 };
 
 export function createLiveStore(sb) {
@@ -129,6 +133,7 @@ export function createLiveStore(sb) {
       return row;
     },
     async runTask(agent, kind, input = {}) { return this.command('run_task', { agent, kind, input }); },
+    async upload(path, file, contentType) { const { error } = await sb.storage.from('town-files').upload(path, file, { upsert: true, contentType }); if (error) throw new Error(`Upload failed: ${error.message}${/policy|security/i.test(error.message) ? ' (run supabase/011_career.sql first)' : ''}`); },
     async fileUrl(path) { if (!path) return null; const { data } = await sb.storage.from('town-files').createSignedUrl(path, 3600); return data?.signedUrl || null; },
     async fileText(path) { const { data } = await sb.storage.from('town-files').download(path); return data ? data.text() : ''; },
     async signOut() { await sb.auth.signOut(); location.reload(); },
@@ -221,6 +226,7 @@ export function createDemoStore(seed) {
     async remove(table, m) { tables[table] = (tables[table] || []).filter((r) => !match(r, m)); notify(table); toast(); },
     async command() { toast(); return { id: nextId++ }; },
     async runTask() { toast(); return { id: nextId++ }; },
+    async upload() { toast(); },
     async fileUrl(path) { return path && path.startsWith('data:') ? path : null; },
     async fileText() { return '<p style="font:16px sans-serif;padding:20px">Demo preview</p>'; },
     async signOut() {},

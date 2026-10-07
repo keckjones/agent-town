@@ -49,9 +49,10 @@ export function seedDemo() {
     A('finance', 'Finance & Analytics', 'finance', 'Ledger and morning text'),
     A('learning', 'Performance Learning', 'finance', 'What produces collected profit'),
     A('capital', 'Capital Allocation', 'finance', 'Reserves from collected cash only'),
+    A('career', 'Career Agent', 'career', 'Job search: packets, verified contacts, outreach'),
   ];
   const divisions = [['hq', 'Executive Overview'], ['agency', 'Local Website Agency'], ['sports', 'Sports Platform Marketing'], ['etsy', 'Etsy Commerce'], ['dropship', 'Dropshipping Commerce'],
-    ['realestate', 'Real Estate Wholesaling'], ['media', 'Brands, Social & Video'], ['ventures', 'Market Research & New Ventures'], ['customers', 'Customer Operations'], ['finance', 'Finance & Performance']].map(([id, name], i) => ({ id, name, sort: i, status: 'active' }));
+    ['realestate', 'Real Estate Wholesaling'], ['media', 'Brands, Social & Video'], ['ventures', 'Market Research & New Ventures'], ['customers', 'Customer Operations'], ['finance', 'Finance & Performance'], ['career', 'Career Office']].map(([id, name], i) => ({ id, name, sort: i, status: 'active' }));
   const L = (d, division, category, amount_usd, basis, source) => ({ id: Math.random(), occurred_on: day(d), division, category, amount_usd, basis, source, created_at: ago(d * 1440) });
   const ledger = [
     L(1, 'agency', 'revenue', 400, 'actual', 'stripe (sample)'), L(2, 'agency', 'fees', 11.9, 'estimated', 'stripe estimate'), L(3, 'etsy', 'revenue', 16, 'actual', 'etsy (sample)'),
@@ -144,6 +145,19 @@ export function seedDemo() {
     sites: [{ id: 1, slug: 'desk-fix-daily', title: 'Sample: Desk Fix Daily link-in-bio page', status: 'published', created_at: ago(2000) }],
     brands: [{ id: 1, name: 'Desk Fix Daily (sample)', slug: 'desk-fix-daily', niche: 'Desk setup fixes', status: 'experimenting', business_division: 'dropship', name_check: { note: 'No obvious conflicts found in a web search (not a trademark clearance).' }, created_at: ago(5000) }],
     brand_accounts: [{ id: 1, brand_id: 1, platform: 'youtube', handle: '@deskfixdaily-sample', status: 'connected', publish_mode: 'api', owner_tasks: [{ task: 'Create the channel in YouTube Studio', done: true }, { task: 'Connect it here', done: true }] }, { id: 2, brand_id: 1, platform: 'tiktok', handle: null, status: 'owner_setup', publish_mode: 'manual', owner_tasks: [{ task: 'Create the TikTok account yourself (you agree to its terms)', done: false }, { task: 'Paste the profile link here', done: false }] }],
+    career_profile: [{ id: 1, full_name: 'Sample Student', sender_email: 'sample.student@school.test', resume_text: 'Sample resume', resume_path: null, daily_cap: 5, follow_up_business_days: 7, sending_enabled: false, auto_send: false, multi_contact_companies: ['Sample Brokerage'] }],
+    career_jobs: [
+      { id: 1, company: 'Sample Bank', title: 'Sample: Investment Banking Analyst — Energy', location: 'Houston, TX', status: 'packet_ready', posting_status: 'unverified', track: 'investment_banking', fit: { score: 7, summary: 'Sample: a solid analyst fit for an energy-focused graduate student.', strengths: ['Sample: valuation coursework'], gaps: ['Sample: no prior banking internship listed'] }, packet: { why_company: 'Sample reason.', cover_note: 'Sample cover note.', answers: [{ q: 'Sample question?', a: 'Sample answer.' }], owner_questions: ['Work authorization / sponsorship', 'Earliest start date'] }, created_at: ago(300) },
+      { id: 2, company: 'Sample Advisors', title: 'Sample: Associate, Investment Banking', location: 'New York, NY', status: 'saved', posting_status: 'unverified', created_at: ago(200) },
+    ],
+    career_contacts: [
+      { id: 1, name: 'Sample Recruiter', title: 'Campus Recruiter', company: 'Sample Bank', email: 'recruiter@sample.test', email_verified: true, email_source: 'owner', channel: 'email', status: 'contacted', priority: 1, created_at: ago(5000) },
+      { id: 2, name: 'Sample Branch Manager', title: 'Branch Manager', company: 'Sample Brokerage', channel: 'linkedin', linkedin_url: 'https://example.com/sample', status: 'new', priority: 2, created_at: ago(100) },
+    ],
+    career_messages: [
+      { id: 1, contact_id: 1, direction: 'out', kind: 'intro', subject: 'Sample subject', body: 'Sample email body.', to_email: 'recruiter@sample.test', status: 'sent', via: 'gmail_api', attachment: 'Resume.pdf', similarity: 0.04, follow_up_due: day(-5), sent_at: ago(2000), created_at: ago(2000) },
+      { id: 2, contact_id: 2, direction: 'out', kind: 'linkedin_note', body: 'Sample LinkedIn note for you to send.', status: 'to_send_by_you', via: 'you', created_at: ago(60) },
+    ],
     meetings: [{ id: 1, held_on: day(1), status: 'done', started_at: ago(1440), ended_at: ago(1437), attendees: ['manager', 'scout', 'sports', 'etsy', 'ds_orders', 're_market', 'editor'], notes: { focus: 'Sample: agency replies first', lines: [{ agent: 'scout', dept: 'agency', said: 'Sample: found 4 bakeries yesterday.' }], decisions: ['Sample: answer replies before new outreach'], requests: [], plain_english: 'Sample summary from yesterday.', source: 'Sample data.' } }],
     brand_metrics: [{ id: 1, brand_id: 1, account_id: 1, content_id: 3, observed_on: day(1), source: 'youtube_api', views: 412, likes: 18, comments: 2 }],
   };

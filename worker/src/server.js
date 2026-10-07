@@ -107,9 +107,9 @@ export function startServer() {
       }
 
       // Direct sign-in start: the dashboard links here, so connecting Gmail doesn't depend on the command queue.
-      // Safe to expose: the callback only accepts the business address (agentickj@gmail.com).
+      // Safe to expose: the callback only accepts the expected address for each account (agentickj@gmail.com, or the career address).
       if (req.method === 'GET' && url.pathname === '/oauth/gmail/start') {
-        try { const location = await gmailConnectUrl(); res.writeHead(302, { Location: location }); return res.end(); }
+        try { const location = await gmailConnectUrl(url.searchParams.get('acct') === 'career' ? 'career' : 'business'); res.writeHead(302, { Location: location }); return res.end(); }
         catch (e) { return send(res, 400, page('Gmail not ready', e.message), 'text/html'); }
       }
       if (req.method === 'GET' && url.pathname === '/oauth/gmail/callback') {

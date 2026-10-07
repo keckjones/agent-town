@@ -1,3 +1,8 @@
 node_modules/
 .env
 .DS_Store
+
+# Private personal data: never commit
+*private*.sql
+career_setup*.sql
+*.pdf

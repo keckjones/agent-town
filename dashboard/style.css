@@ -31,7 +31,7 @@ button { cursor: pointer; }
 a { color: var(--ops); }
 
 /* ---------- shell ---------- */
-.shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; }
+.shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; height: 100%; }
 .top { grid-column: 1 / -1; min-width: 0; display: flex; align-items: center; gap: 14px; padding: calc(8px + env(safe-area-inset-top, 0px)) 16px 8px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, #0c1018, #080b10); }
 .brand { font: 600 20px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; display: flex; align-items: center; gap: 10px; white-space: nowrap; }
 .brand .mark { width: 22px; height: 22px; border: 1.5px solid var(--gold); transform: rotate(45deg); display: inline-grid; place-items: center; }
@@ -61,7 +61,7 @@ a { color: var(--ops); }
 .btn[disabled] { opacity: .45; cursor: not-allowed; }
 
 /* ---------- station rail ---------- */
-.rail { grid-row: 2 / 4; border-right: 1px solid var(--line); background: var(--bg-2); overflow-y: auto; padding: 10px 8px calc(10px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 2px; }
+.rail { grid-row: 3 / 5; border-right: 1px solid var(--line); background: var(--bg-2); overflow-y: auto; padding: 10px 8px calc(10px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 2px; }
 .rail h4 { font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin: 12px 8px 4px; }
 .station-btn { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: 6px; padding: 7px 8px; color: var(--muted); }
 .station-btn:hover { background: var(--raise); color: var(--text); }
@@ -72,7 +72,7 @@ a { color: var(--ops); }
 .badge.red { background: var(--down); color: #1a0505; }
 
 /* ---------- stage (3D) ---------- */
-.stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: radial-gradient(1200px 600px at 50% 35%, #101826 0%, #06080c 70%); }
+.stage { grid-row: 3; grid-column: 2; position: relative; min-width: 0; min-height: 0; overflow: hidden; background: radial-gradient(1200px 600px at 50% 35%, #101826 0%, #06080c 70%); }
 #floor { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .stage-hud { position: absolute; left: 16px; top: 14px; display: flex; gap: 8px; flex-wrap: wrap; z-index: 2; pointer-events: none; }
 .stage-hud > * { pointer-events: auto; }
@@ -152,12 +152,12 @@ details.x > summary { cursor: pointer; color: var(--ops); font-size: 13px; }
 .timeline .ev { font-size: 12.5px; } .timeline .ev time { font: 11px var(--mono); color: var(--faint); margin-right: 6px; }
 
 /* ---------- tape ---------- */
-.tape { grid-column: 2; border-top: 1px solid var(--line); background: #070a0f; display: flex; align-items: stretch; min-width: 0; height: 34px; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.tape { grid-row: 4; grid-column: 2; border-top: 1px solid var(--line); background: #070a0f; display: flex; align-items: stretch; min-width: 0; height: 34px; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .tape { position: relative; }
 .tape .lbl { font: 600 11px var(--mono); letter-spacing: .12em; color: var(--ops); padding: 0 12px; display: grid; place-items: center; border: 0; border-right: 1px solid var(--line); background: none; white-space: nowrap; }
 .tape .lbl:hover { background: var(--raise); }
 .tape .track { overflow: hidden; flex: 1; position: relative; }
-.tape .items { position: absolute; white-space: nowrap; display: flex; gap: 28px; align-items: center; height: 100%; padding-left: 16px; animation: tape 80s linear infinite; font: 12px var(--mono); color: var(--muted); }
+.tape .items { position: absolute; white-space: nowrap; display: flex; gap: 28px; align-items: center; height: 100%; padding-left: 16px; animation: tape 180s linear infinite; font: 12px var(--mono); color: var(--muted); }
 .tape .items b { color: var(--text); font-weight: 500; }
 .tape .track:hover .items, .tape .track:focus-within .items, .tape .items.still { animation-play-state: paused; }
 .tape .tk { background: none; border: 0; padding: 4px 6px; border-radius: 4px; font: 12px var(--mono); color: var(--muted); white-space: nowrap; }
@@ -282,6 +282,8 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line-2); border-bottom-wid
   .rail.open { transform: none; box-shadow: 10px 0 40px rgba(0,0,0,.6); }
   .menu-btn { display: inline-flex; }
   .tape { grid-column: 1; }
+  .stage { grid-column: 1; }
+  .goalbar { gap: 8px; padding: 6px 12px; } .goalbar .gl { font-size: 10px; }
   .top { flex-wrap: wrap; gap: 8px; padding-left: 12px; padding-right: 12px; }
   .search { order: 10; flex: 1 1 100%; }
   .top .pill { font-size: 11px; padding: 3px 8px; }
@@ -307,3 +309,14 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line-2); border-bottom-wid
 .mtg-line { border-left: 3px solid var(--c); padding: 8px 10px; margin: 8px 0; background: rgba(255,255,255,.02); border-radius: 0 6px 6px 0; }
 .mtg-line .who { font-size: 12px; margin-bottom: 3px; }
 .mtg-line .said { line-height: 1.45; }
+
+/* Weekly earnings goal bar (under the top bar) */
+.goalbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 7px 16px; border: 0; border-bottom: 1px solid var(--line); background: #0a0e15; color: var(--muted); font: 12px var(--mono); text-align: left; cursor: pointer; min-width: 0; }
+.goalbar:hover { background: #0d121b; }
+.goalbar .gl { font-weight: 600; letter-spacing: .1em; text-transform: uppercase; font-size: 11px; color: var(--gold); white-space: nowrap; }
+.goalbar .gv { white-space: nowrap; } .goalbar .gv b { color: var(--text); font-size: 14px; }
+.goalbar .gtrack { flex: 1; min-width: 80px; height: 10px; border-radius: 6px; background: #1a2230; overflow: hidden; border: 1px solid var(--line-2); }
+.goalbar .gfill { display: block; height: 100%; background: linear-gradient(90deg, #1f9d63, #2fd38a); border-radius: 6px; transition: width .6s ease; }
+.goalbar .gfill.done { background: linear-gradient(90deg, #c99a2e, #f2c14e); }
+.goalbar .gp { color: var(--text); font-weight: 600; min-width: 36px; }
+.goalbar .gr, .goalbar .gn { white-space: nowrap; } .goalbar .gn { color: var(--faint); }

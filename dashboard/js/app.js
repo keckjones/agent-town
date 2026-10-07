@@ -54,6 +54,7 @@ function shellHtml(demo) {
       <span class="pill" id="online"><span class="dot"></span>worker</span>
       <button class="btn danger sm" id="pause" title="Pause or resume every agent (P)">Pause all</button>
     </header>
+    <button class="goalbar" id="goalbar" data-act="goto" data-id="finance" title="Weekly earnings goal: confirmed revenue only. Change the goal in Connections & Settings."></button>
     <nav class="rail" id="rail" aria-label="Stations"></nav>
     <main class="stage" id="stage">
       <canvas id="floor" aria-label="3D trading floor. Use the station list, the agent monitor, or keyboard shortcuts to navigate."></canvas>
@@ -86,6 +87,22 @@ function renderRail() {
   $('#rail').innerHTML = group('Command', ['overview', 'warroom', 'team', 'links', 'approvals', 'monitor', 'timeline']) + group('Businesses', ['agency', 'sports', 'etsy', 'dropship', 'realestate', 'media']) + group('Operations', ['ventures', 'customers', 'finance', 'hq', 'setup']);
 }
 
+// Weekly earnings goal: money actually collected since Monday (confirmed payments only), against the goal you set.
+function renderGoal(st) {
+  const goal = Number(st.weekly_goal || 0);
+  const now = new Date(), mon = new Date(now); mon.setHours(0, 0, 0, 0); mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+  const from = `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, '0')}-${String(mon.getDate()).padStart(2, '0')}`;
+  const got = S.t('ledger').filter((r) => r.category === 'revenue' && r.basis === 'actual' && r.occurred_on >= from).reduce((s, r) => s + Number(r.amount_usd || 0), 0);
+  const pct = goal > 0 ? Math.min(1, Math.max(0, got / goal)) : 0;
+  const left = Math.max(0, goal - got);
+  const daysLeft = 7 - ((now.getDay() + 6) % 7);
+  $('#goalbar').innerHTML = `<span class="gl">Weekly earnings goal</span>
+    <span class="gv"><b>${M.money(got)}</b> of ${goal ? M.money(goal) : '<i>no goal set</i>'}</span>
+    <span class="gtrack" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct * 100)}"><span class="gfill ${pct >= 1 ? 'done' : ''}" style="width:${(pct * 100).toFixed(1)}%"></span></span>
+    <span class="gp">${goal ? `${Math.round(pct * 100)}%` : '—'}</span>
+    <span class="gr hide-sm">${!goal ? 'Set a goal in Settings' : pct >= 1 ? 'Goal reached this week' : `${M.money(left)} to go · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left`}${S.demo ? ' · DEMO' : ''}</span>
+    <span class="gn hide-sm">Confirmed payments since Monday</span>`;
+}
 function renderTop() {
   const st = S.t('settings')[0] || {};
   const on = M.online(S);
@@ -94,6 +111,7 @@ function renderTop() {
   const ai = M.aiToday(S), budget = Number(st.daily_budget_usd || 5);
   $('#spend').innerHTML = `AI today <b class="${ai >= budget * 0.9 ? 'down' : ''}">${M.money(ai, 2)}</b> / ${M.money(budget, 2)}`;
   $('#paused-flag').hidden = !st.paused;
+  renderGoal(st);
   const pb = $('#pause'); pb.textContent = st.paused ? 'Resume all' : 'Pause all'; pb.className = `btn sm ${st.paused ? 'go' : 'danger'}`;
   const c = S.conn?.() || {};
   const age = c.last ? Math.round((Date.now() - c.last) / 1000) : null;
@@ -155,6 +173,8 @@ function renderTape() {
   const html = items.map((e) => `<button class="tk ${e.priority}" data-act="ref" data-ref="${esc(e.ref)}" title="${esc(ct(e.at))}"><i class="k">${esc(e.deptName)}</i><b class="${e.level === 'error' ? 'down' : e.level === 'warn' ? 'gold' : e.level === 'success' ? 'up' : ''}">${esc(e.agentName)}</b> ${esc(e.text)}${e.count > 1 ? ` <span class="x">×${e.count}</span>` : ''} <span class="faint">${ago(e.at)}</span></button>`).join('');
   $('#tape').innerHTML = html ? html + html : '<span class="faint">No recorded events match this filter.</span>';
   $('#tape').classList.toggle('still', !html);
+  // A steady, readable speed (about 35 pixels a second) however many items are on the tape.
+  requestAnimationFrame(() => { const el = $('#tape'); const secs = Math.max(90, Math.round(el.scrollWidth / 2 / 35)); const cur = parseFloat(el.style.animationDuration) || 0; if (Math.abs(cur - secs) / secs > 0.15) el.style.animationDuration = `${secs}s`; });
   $('#tape-filter').textContent = `LIVE${f.dept || f.kind || f.priority === 'all' || f.priority === 'high' ? ' · filtered' : ''} ▾`;
 }
 function renderTapeMenu() {

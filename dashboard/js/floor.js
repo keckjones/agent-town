@@ -87,20 +87,20 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.55;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#070a10');
-  scene.fog = new THREE.Fog('#070a10', 55, 110);
+  scene.fog = new THREE.Fog('#10151f', 70, 140);
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
 
   // ---------- shared materials / geometry ----------
   const mat = {
-    floor: new THREE.MeshStandardMaterial({ color: '#141a24', metalness: 0.35, roughness: 0.5 }),
-    carpet: new THREE.MeshStandardMaterial({ color: '#1d2533', metalness: 0.05, roughness: 0.95 }),
+    floor: new THREE.MeshStandardMaterial({ color: '#262f3d', metalness: 0.3, roughness: 0.45 }),
+    carpet: new THREE.MeshStandardMaterial({ color: '#344054', metalness: 0.05, roughness: 0.9 }),
     wall: new THREE.MeshStandardMaterial({ color: '#0d121a', metalness: 0.3, roughness: 0.7 }),
     metal: new THREE.MeshStandardMaterial({ color: '#2a3340', metalness: 0.85, roughness: 0.3 }),
-    deskTop: new THREE.MeshStandardMaterial({ color: '#3a4352', metalness: 0.3, roughness: 0.5 }),
+    deskTop: new THREE.MeshStandardMaterial({ color: '#5a6577', metalness: 0.25, roughness: 0.45 }),
     wood: new THREE.MeshStandardMaterial({ color: '#3a2a1f', metalness: 0.15, roughness: 0.55 }),
     chair: new THREE.MeshStandardMaterial({ color: '#15191f', metalness: 0.2, roughness: 0.7 }),
     bezel: new THREE.MeshStandardMaterial({ color: '#090b0f', metalness: 0.6, roughness: 0.4 }),
@@ -147,10 +147,10 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
   };
 
   // ---------- lighting ----------
-  scene.add(new THREE.HemisphereLight('#c4d2ff', '#1a1f2a', 0.9));
-  scene.add(new THREE.AmbientLight('#9fb0d0', 0.35));
-  const key = new THREE.DirectionalLight('#dfe8ff', 1.3); key.position.set(-15, 30, 20); scene.add(key);
-  const fill = new THREE.DirectionalLight('#8fb0ff', 0.25); fill.position.set(20, 15, -10); scene.add(fill);
+  scene.add(new THREE.HemisphereLight('#dfe6ff', '#3a4252', 1.5));
+  scene.add(new THREE.AmbientLight('#b8c4dc', 0.7));
+  const key = new THREE.DirectionalLight('#f2f5ff', 1.9); key.position.set(-15, 30, 20); scene.add(key);
+  const fill = new THREE.DirectionalLight('#b8ccff', 0.6); fill.position.set(20, 15, -10); scene.add(fill);
 
   // ---------- room ----------
   const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(84, 64), mat.floor); floorMesh.rotation.x = -Math.PI / 2; floorMesh.position.z = -2; scene.add(floorMesh);
@@ -291,7 +291,7 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
   const drawWarSign = (live, force = false) => { if (live === warSignLive && !force) return; warSignLive = live; const g = warSign.canvas.getContext('2d'); g.fillStyle = '#0a0f17'; g.fillRect(0, 0, 1360, 200); g.fillStyle = live ? '#2fd38a' : '#f2c14e'; g.fillRect(0, 186, 1360, 14);
     g.font = `600 104px ${FONT_D}`; g.textBaseline = 'middle'; g.fillStyle = '#f5e6bf'; const t = live ? 'WAR ROOM · IN SESSION' : 'WAR ROOM'; g.fillText(t, (1360 - g.measureText(t).width) / 2, 92); warSign.tex.needsUpdate = true; };
   drawWarSign(false);
-  const warLight = low ? null : new THREE.PointLight('#ffe2a8', 1.2, 10, 1.8); if (warLight) { warLight.position.set(0, 3, 0); war.add(warLight); }
+  const warLight = low ? null : new THREE.PointLight('#fff0d0', 3.2, 14, 1.4); if (warLight) { warLight.position.set(0, 3, 0); war.add(warLight); }
   war.traverse((o) => { if (o.isMesh && !o.userData.pick) o.userData.pick = { type: 'war', id: 'room' }; });
   const toWorld = (p, y = 0) => new THREE.Vector3(WAR.x + p.x, y, WAR.z + p.z);
   function drawWarScreen(m) {
@@ -431,7 +431,7 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
       const signS = screenMesh(4, 1, 1024, 256); signS.mesh.position.set(0, 4.2, 0); signS.mesh.userData.pick = { type: 'dept', id: dept.id }; group.add(signS.mesh);
       const signBack = signS.mesh.clone(); signBack.rotation.y = Math.PI; group.add(signBack);
       for (const x of [-1.6, 1.6]) { const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 4), mat.metal); wire.position.set(x, 6.7, 0); group.add(wire); }
-      const light = low ? null : new THREE.PointLight('#dfe8ff', 1.4, 12, 1.6); if (light) { light.position.set(0, 3, 0); group.add(light); }
+      const light = low ? null : new THREE.PointLight('#f4f7ff', 2.6, 16, 1.4); if (light) { light.position.set(0, 3, 0); group.add(light); }
 
       carpet.userData.pick = { type: 'dept', id: dept.id };
       clusters[dept.id] = { group, sign: signS, carpet, light, dept, anchor: new THREE.Vector3(cx, 5.1, cz), width };
@@ -866,7 +866,7 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     maybeBreak(time);
     if (time - lastSync > 0.5) { lastSync = time; if (meeting) syncMeeting(); }
     sky.update(time);
-    if (!reducedMotion) { codeTex.offset.y = (time * 0.08) % 1; docTex.offset.y = (time * 0.02) % 1; vidTex.offset.x = (time * 0.05) % 1; led.tex.offset.x = (time * 0.012) % 1; }
+    if (!reducedMotion) { codeTex.offset.y = (time * 0.08) % 1; docTex.offset.y = (time * 0.02) % 1; vidTex.offset.x = (time * 0.05) % 1; led.tex.offset.x = (time * 0.004) % 1; }
     // arcs: travel + fade
     for (let i = arcs.length - 1; i >= 0; i--) {
       const a = arcs[i]; const age = (performance.now() - a.born) / 1000;

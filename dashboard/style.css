@@ -188,6 +188,8 @@ details.x > summary { cursor: pointer; color: var(--ops); font-size: 13px; }
 .stage.has-panel .legend, .stage.flat-mode .legend { display: none; }
 .label3d.dept { font-size: 13px; padding: 5px 9px; border-top-width: 2px; }
 .label3d.dept.exec { color: var(--gold); }
+.label3d.dept.warroom { color: var(--gold); }
+.label3d.dept.warroom.hot { box-shadow: 0 0 0 1px rgba(47,211,138,.55), 0 0 18px rgba(47,211,138,.25); }
 .label3d .n i { font-style: normal; margin-left: 6px; }
 .s-working { color: #3aa0ff; } .s-needs { color: var(--gold); } .s-blocked { color: var(--down); } .s-paused { color: #a3adbd; } .s-idle { color: var(--faint); }
 .label3d.desk { display: grid; gap: 1px; text-align: left; font: 500 11px var(--body); letter-spacing: 0; text-transform: none; padding: 5px 8px; max-width: 220px; white-space: normal; border-left: 3px solid var(--line-2); }
@@ -300,3 +302,8 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line-2); border-bottom-wid
 .lm { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; }
 .lm > div { display: grid; } .lm b { font: 600 20px var(--display); } .lm span { font: 11px var(--mono); color: var(--muted); }
 .linkcard .url { font-size: 11px; color: var(--faint); }
+
+/* War Room */
+.mtg-line { border-left: 3px solid var(--c); padding: 8px 10px; margin: 8px 0; background: rgba(255,255,255,.02); border-radius: 0 6px 6px 0; }
+.mtg-line .who { font-size: 12px; margin-bottom: 3px; }
+.mtg-line .said { line-height: 1.45; }

@@ -2,6 +2,7 @@
 import { db, say, enqueue, getSettings, addDocument, startOfToday } from '../lib/db.js';
 import { requestWork, planIdea, capabilityList, CAPABILITIES } from '../lib/collab.js';
 import { PLAIN_ENGLISH } from '../lib/explain.js';
+import { morningMeeting } from '../lib/meeting.js';
 import { askJSON, spentToday } from '../lib/claude.js';
 import { emailReady } from '../config.js';
 
@@ -72,6 +73,8 @@ async function snapshot() {
 export const handlers = {
   // You give the Big Boss an idea; it plans the steps with the team and asks you to approve the plan.
   plan_idea: planIdea,
+  // Once a day: department leads + Big Boss meet in the War Room, report from the records, and ask each other for help.
+  morning_meeting: morningMeeting,
 
   async plan(task) {
     await say('manager', 'Calling a town meeting to review progress...');

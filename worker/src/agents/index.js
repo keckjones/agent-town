@@ -36,6 +36,7 @@ export const registry = {
 export const verbs = {
   plan: 'Reviewing all divisions and assigning work',
   plan_idea: 'Planning your idea with the team',
+  morning_meeting: 'Running the morning meeting in the War Room',
   build_site: 'Building a landing page',
   research: 'Researching a market question with cited sources',
   find_prospects: 'Finding local businesses',

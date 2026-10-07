@@ -141,7 +141,7 @@ const once = (agent, kind, input = {}, priority = 5) => async () => {
 
 // Requests from the dashboard (test text, refresh integrations, run a job now).
 const RUNNABLE = {
-  manager: ['plan', 'plan_idea'], scout: ['find_prospects'], research: ['research'], etsy: ['research_products'], opportunity: ['propose_opportunities'],
+  manager: ['plan', 'plan_idea', 'morning_meeting'], scout: ['find_prospects'], research: ['research'], etsy: ['research_products'], opportunity: ['propose_opportunities'],
   sports: ['sync_picks', 'draft_content'], fulfillment: ['sync_orders'], support: ['process_inbox'], postmaster: ['run_followups', 'draft_email', 'draft_proposal'],
   designer: ['design_page'], caller: ['prepare_call', 'record_outcome'], marketer: ['plan_campaign'], merchant: ['build_digital_product'], qa: ['check_site'],
   ds_research: ['research_niches'], ds_store: ['build_listing'], ds_orders: ['review_order', 'sync_shopify_orders'],
@@ -254,6 +254,7 @@ async function main() {
   checkIntegrations().catch((e) => console.error('Integration check:', e.message));
 
   every(config.managerCron, 'manager', once('manager', 'plan', {}, 1));
+  every(config.meetingCron, 'morning meeting', once('manager', 'morning_meeting', {}, 1));
   every('* * * * *', 'approvals', approvalsJob);
   every('* * * * *', 'team requests', routeJob);
   every('* * * * *', 'commands', commandsJob, { evenWhenPaused: true });

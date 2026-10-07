@@ -55,6 +55,7 @@ const TABLES = {
   sites: { order: ['created_at', false], limit: 100 },
   published_links: { order: ['created_at', false], limit: 500 },
   site_visits: { order: ['day', false], limit: 2000 },
+  meetings: { order: ['held_on', false], limit: 14 },
 };
 
 export function createLiveStore(sb) {
@@ -177,14 +178,41 @@ export function createDemoStore(seed) {
       notify('tasks'); notify('agents'); notify('events');
     }, 7000);
   }
+  // A sample morning meeting so the War Room can be seen in the demo. Every line says "Sample".
+  const MEETING = [
+    ['scout', 'agency', 'Sample: we found 6 hair salons yesterday and 2 emails are waiting for your approval. Next we follow up with the bakery.'],
+    ['sports', 'sports', 'Sample: the picks feed failed with an expired login, so no sports posts went out. We need you to reconnect it.', { need: 'social_content', title: 'Sample: posts for the Desk Fix Daily launch', from: 'sports', to: 'social' }],
+    ['etsy', 'etsy', 'Sample: the pet mug is blocked until a sample arrives. Nothing else is waiting.'],
+    ['ds_orders', 'dropship', 'Sample: one order was routed to the supplier at a 31% margin. The launch decision is waiting on you.'],
+    ['re_market', 'realestate', 'Sample: the offer on 12 Pine St is ready for your review. We never sign or send money for you.'],
+    ['editor', 'media', 'Sample: the "3 cable fixes" video is in editing; quality review is next.', { need: 'landing_page', title: 'Sample: Desk Fix Daily shop page', from: 'editor', to: 'designer' }],
+  ];
+  function demoMeeting() {
+    const m = { id: nextId++, held_on: now().slice(0, 10), status: 'in_session', started_at: now(), ended_at: null, attendees: ['manager', ...MEETING.map((x) => x[0])], notes: { lines: [], decisions: [], requests: [], source: 'Sample data. Nothing here is real.' }, created_at: now() };
+    tables.meetings = [m, ...(tables.meetings || []).filter((x) => x.held_on !== m.held_on)];
+    emit('manager', 'Sample: morning meeting started in the War Room.'); notify('meetings');
+    let i = 0;
+    const next = () => {
+      if (i < MEETING.length) {
+        const [agent, dept, said, req] = MEETING[i++];
+        m.notes = { ...m.notes, lines: [...m.notes.lines, { agent, dept, said, asks: [] }], requests: req ? [...m.notes.requests, { id: nextId++, ...req }] : m.notes.requests };
+        notify('meetings'); setTimeout(next, 3500); return;
+      }
+      m.status = 'done'; m.ended_at = now();
+      m.notes = { ...m.notes, focus: 'Sample: clear your approvals, then fix the sports feed', decisions: ['Sample: answer agency replies before new outreach', 'Sample: ask the owner to reconnect the picks feed', 'Sample: hold the dropship launch until the owner decides'], plain_english: 'Sample: most teams are waiting on your approvals. Two teams asked others for help, and those requests are now on their desks.' };
+      emit('manager', 'Sample: morning meeting done. Focus: clear approvals, then fix the sports feed.', 'success'); notify('meetings');
+    };
+    setTimeout(next, 2500);
+  }
   return {
-    demo: true, tables, missing: new Set(),
+    demo: true, tables, missing: new Set(), startMeeting: () => { if (!(tables.meetings || []).some((m) => m.status === 'in_session')) demoMeeting(); },
     conn: () => ({ state: 'demo', label: 'demonstration data (no connection)', last: Date.now() }),
     t: (n) => tables[n] || [],
     async init(onChange, onNewEvent) {
       notify = onChange; onEvent = onNewEvent;
       setTimeout(tick, 1500);
       setInterval(tick, 9000);
+      if (!/nomeeting/.test(location.search)) setTimeout(demoMeeting, 3000);
     },
     reload: () => {},
     async update(table, m, patch) { for (const r of tables[table] || []) if (match(r, m)) Object.assign(r, patch); notify(table); toast(); },

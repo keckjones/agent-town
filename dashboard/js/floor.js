@@ -4,6 +4,7 @@
 // Quality: full | low (1x pixels, 30 fps, no idle motion, fewer lights). Reduced motion: no animation, instant camera.
 import * as THREE from 'three';
 import { DEPTS, STATUS } from './floor-model.js';
+import { buildSkyline } from './skyline.js';
 
 export function webglAvailable() {
   try { const c = document.createElement('canvas'); return !!(window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl'))); } catch { return false; }
@@ -66,9 +67,13 @@ function drawSign(canvas, dept, w) {
 }
 
 // ---------------------------------------------------------------- layout
-// Departments on a 5 × 2 grid in front of the Executive Office. Businesses in the back row, support teams in front.
-const GRID = { agency: [-26, -3], sports: [-13, -3], etsy: [13, -3], dropship: [26, -3], realestate: [0, -2],
-  media: [-26, 11], ventures: [-13, 11], customers: [0, 11], finance: [13, 11], hq: [26, 11] };
+// Departments on a 5 × 2 grid in front of the Executive Office, with the glass War Room in the middle.
+// Businesses in the back row, support teams in front.
+const GRID = { agency: [-26, -4], sports: [-13, -4], etsy: [13, -4], dropship: [26, -4], realestate: [0, -4],
+  media: [-26, 12.5], ventures: [-13, 12.5], customers: [0, 12.5], finance: [13, 12.5], hq: [26, 12.5] };
+const WAR = { x: 0, z: 4.3, w: 13, d: 6.4 };
+// Walking lanes: an aisle behind the War Room, one in front of it, and side lanes past its doors.
+const A_BACK = 0.2, A_FRONT = 8.4, LANE_X = 8.5;
 const EXEC = { x: 0, z: -17, top: 1.6, w: 20, d: 10 };
 const DESK_W = 1.6;
 const hash = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h); };
@@ -87,7 +92,7 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#070a10');
   scene.fog = new THREE.Fog('#070a10', 55, 110);
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 300);
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
 
   // ---------- shared materials / geometry ----------
   const mat = {
@@ -150,17 +155,38 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
   // ---------- room ----------
   const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(84, 64), mat.floor); floorMesh.rotation.x = -Math.PI / 2; floorMesh.position.z = -2; scene.add(floorMesh);
   const grid = new THREE.GridHelper(84, 42, '#152238', '#0f1826'); grid.position.set(0, 0.005, -2); grid.material.transparent = true; grid.material.opacity = 0.35; scene.add(grid);
-  const back = new THREE.Mesh(new THREE.BoxGeometry(84, 16, 0.5), mat.wall); back.position.set(0, 8, -27); scene.add(back);
-  for (const x of [-42, 42]) { const s = new THREE.Mesh(new THREE.BoxGeometry(0.5, 16, 50), mat.wall); s.position.set(x, 8, -4); scene.add(s); }
-  // Pillars along the side walls and a skirting light line.
+  // A high floor of a Manhattan office tower: floor-to-ceiling windows on three sides with the city outside.
+  // The display walls hang on solid core sections; everything else is glass.
+  const sky = buildSkyline(scene, { low, maxAniso: Math.min(4, maxAniso) });
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(85, 0.6, 65), mat.metal); slab.position.set(0, -0.31, -2); scene.add(slab);
+  const facade = new THREE.Mesh(new THREE.BoxGeometry(85.4, 300, 65.4), new THREE.MeshBasicMaterial({ color: '#0b1018', fog: false })); facade.position.set(0, -150.7, -2); scene.add(facade);
+  const H_ROOM = 16;
+  const core = (w, x, z, ry) => { const c = new THREE.Mesh(new THREE.BoxGeometry(w, H_ROOM, 0.5), mat.wall); c.position.set(x, H_ROOM / 2, z); c.rotation.y = ry; scene.add(c); };
+  core(70, 0, -27, 0);                                   // media wall behind the three back screens
+  core(21, -42, -6, Math.PI / 2); core(21, 42, -6, Math.PI / 2);   // behind the side screens
+  const winGlass = new THREE.MeshPhysicalMaterial({ color: '#9fc4ff', metalness: 0.1, roughness: 0.05, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false });
+  const mullion = new THREE.BoxGeometry(0.16, H_ROOM, 0.22), transom = new THREE.BoxGeometry(1, 0.14, 0.24);
+  // A window wall from a to b (x,z pairs) with a mullion every ~3.6 units, a sill and a head.
+  const windowWall = (ax, az, bx, bz) => {
+    const len = Math.hypot(bx - ax, bz - az), ry = Math.atan2(bx - ax, bz - az) - Math.PI / 2;
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    const pane = new THREE.Mesh(new THREE.PlaneGeometry(len, H_ROOM), winGlass); pane.position.set(mx, H_ROOM / 2, mz); pane.rotation.y = ry; scene.add(pane);
+    const n = Math.max(1, Math.round(len / 3.6));
+    for (let i = 0; i <= n; i++) { const t = i / n; const m = new THREE.Mesh(mullion, mat.metal); m.position.set(ax + (bx - ax) * t, H_ROOM / 2, az + (bz - az) * t); m.rotation.y = ry; scene.add(m); }
+    for (const y of [0.45, 3.4, H_ROOM - 0.07]) { const b = new THREE.Mesh(transom, mat.metal); b.scale.x = len; b.position.set(mx, y, mz); b.rotation.y = ry; scene.add(b); }
+  };
+  windowWall(-42, -27, -35, -27); windowWall(35, -27, 42, -27);          // back corners
+  windowWall(-42, -27, -42, -16.5); windowWall(-42, 4.5, -42, 30);        // left side
+  windowWall(42, -27, 42, -16.5); windowWall(42, 4.5, 42, 30);            // right side
+  // Columns along the glass and a skirting light line.
   const pillarGeo = new THREE.BoxGeometry(0.8, 16, 0.8);
-  for (const x of [-41.4, 41.4]) for (const z of [-22, -12, -2, 8, 18]) { const p = new THREE.Mesh(pillarGeo, mat.metal); p.position.set(x, 8, z); scene.add(p); }
+  for (const x of [-41.4, 41.4]) for (const z of [-22, -12, -2, 8, 18, 28]) { const p = new THREE.Mesh(pillarGeo, mat.metal); p.position.set(x, 8, z); scene.add(p); }
   const skirt = new THREE.Mesh(new THREE.BoxGeometry(84, 0.06, 0.06), new THREE.MeshBasicMaterial({ color: '#3aa0ff' })); skirt.position.set(0, 0.05, -26.7); scene.add(skirt);
   // Break areas: a coffee bar (left) and a water cooler (right). Idle agents sometimes walk here; it's labeled as a break.
   const plantPot = new THREE.CylinderGeometry(0.28, 0.22, 0.5, 12), plantLeaf = new THREE.IcosahedronGeometry(0.55, 1);
   const potMat = new THREE.MeshStandardMaterial({ color: '#30353d', roughness: 0.8 }), leafMat = new THREE.MeshStandardMaterial({ color: '#2f6b46', roughness: 0.9, flatShading: true });
   const plant = (x, z, s = 1) => { const g = new THREE.Group(); const pot = new THREE.Mesh(plantPot, potMat); pot.position.y = 0.25; g.add(pot); const l = new THREE.Mesh(plantLeaf, leafMat); l.position.y = 0.95; l.scale.set(1, 1.3, 1); g.add(l); g.position.set(x, 0, z); g.scale.setScalar(s); scene.add(g); };
-  const BREAK = { coffee: new THREE.Vector3(-36.5, 0, 4.2), water: new THREE.Vector3(36.5, 0, 4.2) };
+  const BREAK = { coffee: new THREE.Vector3(-36.5, 0, 4.3), water: new THREE.Vector3(36.5, 0, 4.3) };
   { const bar = new THREE.Group(); bar.position.set(-39, 0, 4);
     const counter = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.05, 5), mat.wood); counter.position.y = 0.52; bar.add(counter);
     const topS = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.06, 5.1), mat.deskTop); topS.position.y = 1.07; bar.add(topS);
@@ -172,7 +198,7 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.0, 0.5), new THREE.MeshStandardMaterial({ color: '#d7dde6', roughness: 0.6 })); body.position.y = 0.5; wc.add(body);
     const jug = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.45, 16), new THREE.MeshPhysicalMaterial({ color: '#7fc4ff', transparent: true, opacity: 0.55, roughness: 0.1 })); jug.position.y = 1.25; wc.add(jug);
     scene.add(wc); }
-  for (const [x, z] of [[-38, 0], [-38, 8.5], [38, 0], [38, 8.5], [-11, -24.5], [11, -24.5], [-34, -24.5], [34, -24.5], [-34, 18.5], [34, 18.5]]) plant(x, z, 1.1);
+  for (const [x, z] of [[-38, 0], [-38, 8.5], [38, 0], [38, 8.5], [-11, -24.5], [11, -24.5], [-34, -24.5], [34, -24.5], [-34, 19.5], [34, 19.5], [-7.4, 1.4], [7.4, 1.4], [-7.4, 7.2], [7.4, 7.2]]) plant(x, z, 1.1);
   // LED ticker band across the top of the back wall: scrolls the same recorded events as the bottom ticker.
   const led = screenMesh(84, 1.1, 4096, 64); led.mesh.position.set(0, 15.2, -26.7); scene.add(led.mesh);
   led.tex.wrapS = THREE.RepeatWrapping; led.tex.repeat.set(1, 1);
@@ -228,6 +254,69 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
   const tleg = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.3, 0.72, 12), mat.metal); tleg.position.set(-6, EXEC.top + 0.36, 1.2); exec.add(tleg);
   const execLight = new THREE.PointLight('#ffd98a', low ? 0.8 : 1.6, 16, 2); execLight.position.set(0, EXEC.top + 4, 0); exec.add(execLight);
   exec.traverse((o) => { if (o.isMesh && !o.userData.pick) o.userData.pick = { type: 'exec', id: 'office' }; });
+
+  // ---------- War Room (glass meeting room in the middle of the floor) ----------
+  // The department leads and the Big Boss meet here every morning. Who is in the room comes only from the
+  // `meetings` record (in session, or a few minutes of wrap-up after it ends).
+  const war = new THREE.Group(); war.position.set(WAR.x, 0, WAR.z); scene.add(war);
+  const warCarpet = new THREE.Mesh(new THREE.PlaneGeometry(WAR.w, WAR.d), new THREE.MeshStandardMaterial({ color: '#232b3a', roughness: 0.95 })); warCarpet.rotation.x = -Math.PI / 2; warCarpet.position.y = 0.012; war.add(warCarpet);
+  const warEdgeMat = new THREE.MeshBasicMaterial({ color: '#f2c14e' });
+  const WH = 3.2, warGlass = new THREE.MeshPhysicalMaterial({ color: '#d8e6ff', roughness: 0.04, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false });
+  const warPane = (w, x, z, ry) => { const p = new THREE.Mesh(new THREE.PlaneGeometry(w, WH), warGlass); p.position.set(x, WH / 2, z); p.rotation.y = ry; war.add(p);
+    for (const y of [0.02, WH]) { const r = new THREE.Mesh(new THREE.BoxGeometry(w, 0.07, 0.07), mat.metal); r.position.set(x, y, z); r.rotation.y = ry; war.add(r); } };
+  const hw = WAR.w / 2, hd = WAR.d / 2, door = 0.9;
+  warPane(WAR.w, 0, -hd, 0); warPane(WAR.w, 0, hd, 0);
+  for (const sx of [-1, 1]) { warPane(hd - door, sx * hw, -(hd + door) / 2, Math.PI / 2); warPane(hd - door, sx * hw, (hd + door) / 2, Math.PI / 2); }
+  for (const [x, z] of [[-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd], [-hw, -door], [-hw, door], [hw, -door], [hw, door], [-hw / 3, -hd], [hw / 3, -hd], [-hw / 3, hd], [hw / 3, hd]]) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.1, WH, 0.1), mat.metal); m.position.set(x, WH / 2, z); war.add(m);
+  }
+  const warTop = new THREE.Mesh(new THREE.BoxGeometry(WAR.w + 0.1, 0.05, 0.05), warEdgeMat); warTop.position.set(0, WH + 0.05, hd); war.add(warTop);
+  // Long table, chairs, and a screen on the back glass.
+  const tableTop = new THREE.Mesh(new THREE.BoxGeometry(8.8, 0.08, 1.8), mat.wood); tableTop.position.y = 0.76; war.add(tableTop);
+  for (const x of [-3.2, 0, 3.2]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.72, 0.9), mat.metal); l.position.set(x, 0.36, 0); war.add(l); }
+  const tableGlow = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.02, 0.06), new THREE.MeshBasicMaterial({ color: '#3aa0ff' })); tableGlow.position.set(0, 0.81, 0); war.add(tableGlow);
+  // Seats: six along the back side (facing the camera), six along the front, and the head of the table for the Big Boss.
+  const SEATS = [];
+  for (const row of [-1, 1]) for (let i = 0; i < 6; i++) SEATS.push({ x: -3.75 + i * 1.5, z: row * 1.35, yaw: row < 0 ? 0 : Math.PI, lane: row * 2.35 });
+  const HEAD = { x: -5.3, z: 0, yaw: Math.PI / 2, lane: null };
+  const warChair = (s) => { const c = new THREE.Group(); c.position.set(s.x, 0, s.z); c.rotation.y = s.yaw;
+    const seat = new THREE.Mesh(geo.seat, mat.chair); seat.position.y = 0.46; c.add(seat);
+    const backr = new THREE.Mesh(geo.back, mat.chair); backr.position.set(0, 0.8, -0.28); c.add(backr);
+    const post = new THREE.Mesh(geo.post, mat.metal); post.position.y = 0.21; c.add(post); war.add(c); };
+  [HEAD, ...SEATS].forEach(warChair);
+  const warScreen = screenMesh(6, 1.9, 1600, 506); warScreen.mesh.position.set(0.6, 2.05, -hd + 0.06); warScreen.mesh.userData.pick = { type: 'war', id: 'screen' }; war.add(warScreen.mesh);
+  const warBezel = new THREE.Mesh(new THREE.BoxGeometry(6.2, 2.1, 0.06), mat.bezel); warBezel.position.set(0.6, 2.05, -hd + 0.02); war.add(warBezel);
+  const warSign = screenMesh(3.4, 0.5, 1360, 200); warSign.mesh.position.set(0, WH - 0.32, hd + 0.03); war.add(warSign.mesh);
+  let warSignLive = null;
+  const drawWarSign = (live, force = false) => { if (live === warSignLive && !force) return; warSignLive = live; const g = warSign.canvas.getContext('2d'); g.fillStyle = '#0a0f17'; g.fillRect(0, 0, 1360, 200); g.fillStyle = live ? '#2fd38a' : '#f2c14e'; g.fillRect(0, 186, 1360, 14);
+    g.font = `600 104px ${FONT_D}`; g.textBaseline = 'middle'; g.fillStyle = '#f5e6bf'; const t = live ? 'WAR ROOM · IN SESSION' : 'WAR ROOM'; g.fillText(t, (1360 - g.measureText(t).width) / 2, 92); warSign.tex.needsUpdate = true; };
+  drawWarSign(false);
+  const warLight = low ? null : new THREE.PointLight('#ffe2a8', 1.2, 10, 1.8); if (warLight) { warLight.position.set(0, 3, 0); war.add(warLight); }
+  war.traverse((o) => { if (o.isMesh && !o.userData.pick) o.userData.pick = { type: 'war', id: 'room' }; });
+  const toWorld = (p, y = 0) => new THREE.Vector3(WAR.x + p.x, y, WAR.z + p.z);
+  function drawWarScreen(m) {
+    const g = warScreen.canvas.getContext('2d'); const W = warScreen.canvas.width, H = warScreen.canvas.height;
+    bg(g, W, H, m?.phase === 'in_session' ? '#2fd38a' : '#f2c14e');
+    g.textBaseline = 'top';
+    const head = !m ? 'MORNING MEETING' : m.phase === 'in_session' ? 'MORNING MEETING · IN SESSION' : m.phase === 'wrap_up' ? 'MORNING MEETING · WRAP-UP' : `LAST MEETING · ${m.held_on}`;
+    g.fillStyle = '#e6edf6'; g.font = `600 ${H * 0.13}px ${FONT_D}`; g.fillText(head, W * 0.03, H * 0.06);
+    if (!m) { g.font = `500 ${H * 0.07}px ${FONT_M}`; g.fillStyle = '#8f9bb0'; g.fillText('Daily at 8:05 AM. No meeting on record yet.', W * 0.03, H * 0.3); warScreen.tex.needsUpdate = true; return; }
+    let y = H * 0.25;
+    if (m.focus) { g.font = `600 ${H * 0.08}px ${FONT_M}`; g.fillStyle = '#f2c14e'; g.fillText(fit(g, `FOCUS: ${m.focus}`, W * 0.94), W * 0.03, y); y += H * 0.12; }
+    const lines = m.phase === 'in_session' ? m.lines.slice(-4) : (m.decisions.length ? m.decisions.slice(0, 4).map((d) => ({ dept: '✓', said: d })) : m.lines.slice(-4));
+    for (const l of lines) {
+      const dept = DEPTS.find((d) => d.id === l.dept);
+      g.font = `600 ${H * 0.065}px ${FONT_M}`; g.fillStyle = dept?.accent || '#2fd38a';
+      const tag = dept ? `${dept.short.toUpperCase()} ` : '✓ ';
+      g.fillText(tag, W * 0.03, y);
+      const tw = g.measureText(tag).width;
+      g.font = `500 ${H * 0.065}px ${FONT_M}`; g.fillStyle = '#cfd8e6'; g.fillText(fit(g, l.said, W * 0.94 - tw), W * 0.03 + tw, y);
+      y += H * 0.105; if (y > H * 0.9) break;
+    }
+    g.font = `500 ${H * 0.045}px ${FONT_M}`; g.fillStyle = '#566275'; g.fillText(fit(g, `${m.attendees.length} in the room · summaries of your records, not new facts`, W * 0.94), W * 0.03, H * 0.92);
+    warScreen.tex.needsUpdate = true;
+  }
+  drawWarScreen(null);
 
   // ---------- desks ----------
   const desks = {};          // agentId -> desk object
@@ -352,7 +441,16 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
   }
 
   // ---------- HTML labels: department tags, desk tags (LOD), handoff tags ----------
-  const labelEls = { depts: {}, desks: {}, exec: null };
+  const labelEls = { depts: {}, desks: {}, exec: null, war: null };
+  const WAR_ANCHOR = new THREE.Vector3(WAR.x, WH + 1.1, WAR.z);
+  const speechOf = (id) => { const l = [...(meeting?.lines || [])].reverse().find((x) => x.agent === id); return l ? String(l.said).replace(/[<>&]/g, '').slice(0, 90) + (l.said.length > 90 ? '…' : '') : ''; };
+  function warLabel() {
+    const el = labelEls.war; if (!el) return;
+    const live = meetingLive();
+    const html = live ? `<i class="s-working">${meeting.phase === 'in_session' ? '● In session' : 'Wrap-up'} · ${meeting.attendees.length} in the room</i>` : `<i class="s-idle">Morning meeting 8:05 AM</i>`;
+    const n = el.querySelector('.n'); if (n.innerHTML !== html) { n.innerHTML = html; el._size = null; }
+    el.classList.toggle('hot', live);
+  }
   function buildLabels() {
     labelsEl.innerHTML = '';
     labelEls.depts = {}; labelEls.desks = {};
@@ -363,6 +461,9 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
       el.addEventListener('click', () => (id === 'exec' ? on.exec?.() : on.dept?.(id)));
       labelsEl.appendChild(el); labelEls.depts[id] = el;
     }
+    { const el = document.createElement('button'); el.type = 'button'; el.className = 'label3d dept warroom'; el.style.borderTopColor = '#f2c14e';
+      el.innerHTML = '<span class="t">War Room</span><span class="n"></span>'; el.addEventListener('click', () => on.war?.('label'));
+      labelsEl.appendChild(el); labelEls.war = el; warLabel(); }
     for (const id of Object.keys(desks)) {
       const el = document.createElement('button'); el.type = 'button'; el.className = 'label3d desk';
       el.addEventListener('click', () => on.agent?.(id));
@@ -396,8 +497,10 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
   // Two kinds of walks, both tied to what the records say:
   //  * handoff delivery: when a real handoff row arrives, the agent who handed off carries the folder to the next desk;
   //  * breaks: an agent whose status is Idle may get up for coffee or water. Its tag says "Idle · on a break".
-  // Nobody walks in reduced-motion or simplified mode, and a working agent never leaves its desk.
-  const AISLE_Z = 4.2, SPEED = 2.4;
+  //  * the morning meeting: while the meeting record is in session, the attendees walk to the War Room and sit down.
+  // Nobody walks in reduced-motion or simplified mode, and a working agent never leaves its desk
+  // (the one exception: the Big Boss, whose running task IS the meeting).
+  const SPEED = 2.4;
   let ambientOn = ambient;
   const tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
   function deskFront(d, side = 0.7) {
@@ -407,24 +510,65 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
   }
   function seatPose(d) { d.person.position.set(0, 0, -0.74); d.person.rotation.set(0, 0, 0); for (const l of d.legs) { l.hip.rotation.x = 0; l.knee.rotation.x = Math.PI / 2; } d.armL.position.set(-0.2, 0.92, 0.2); d.armR.position.set(0.2, 0.92, 0.2); d.armL.rotation.x = d.armR.rotation.x = 0.55; }
   function standPose(d) { d.armL.position.set(-0.24, 0.84, 0); d.armR.position.set(0.24, 0.84, 0); d.armL.rotation.x = d.armR.rotation.x = Math.PI / 2; for (const l of d.legs) { l.hip.rotation.x = Math.PI / 2; l.knee.rotation.x = 0; } }
+  const V = (x, z) => new THREE.Vector3(x, 0, z);
+  const aisleOf = (p) => (p.z < WAR.z ? A_BACK : A_FRONT);
+  // Floor height under a point: the Executive Office platform and its stairs are raised.
+  const STAIR0 = EXEC.z + EXEC.d / 2, STAIR1 = STAIR0 + 2.4;
+  function groundY(x, z) {
+    if (Math.abs(x - EXEC.x) <= EXEC.w / 2 && z >= EXEC.z - EXEC.d / 2 && z <= STAIR0) return EXEC.top;
+    if (Math.abs(x - EXEC.x) <= 2 && z > STAIR0 && z < STAIR1) return EXEC.top * (1 - (z - STAIR0) / (STAIR1 - STAIR0));
+    return 0;
+  }
+  // From the boss's desk down the stairs to the floor (the path in reverse brings him back).
+  function execExit(from) { return [from.clone(), V(EXEC.x - 0.5, from.z), V(EXEC.x - 0.5, STAIR0 - 0.4), V(EXEC.x - 0.5, STAIR1 + 0.3)]; }
   function routeTo(from, to) {
     const pts = [from.clone()];
-    if (Math.abs(from.z - to.z) > 1.5 || Math.abs(from.x - to.x) > 3) { pts.push(new THREE.Vector3(from.x, 0, AISLE_Z)); pts.push(new THREE.Vector3(to.x, 0, AISLE_Z)); }
+    if (Math.abs(from.z - to.z) > 1.5 || Math.abs(from.x - to.x) > 3) {
+      const a1 = aisleOf(from), a2 = aisleOf(to);
+      pts.push(V(from.x, a1));
+      // Crossing between the back and front aisles goes around the War Room, never through it.
+      if (a1 !== a2) { const cx = Math.abs(from.x) >= LANE_X ? from.x : Math.abs(to.x) >= LANE_X ? to.x : (from.x + to.x >= 0 ? LANE_X : -LANE_X); pts.push(V(cx, a1), V(cx, a2)); }
+      pts.push(V(to.x, a2));
+    }
     pts.push(to.clone());
     return pts;
   }
-  function startWalk(id, target, kind, label) {
+  // Desk → War Room seat: aisle, side lane, door, the lane behind the chairs, then the seat.
+  function routeToSeat(d, seat) {
+    const s = toWorld(seat);
+    let pts, from;
+    if (d.state?.dept === 'exec') { pts = execExit(deskFront(d, 0).setY(0)); from = pts[pts.length - 1]; pts.pop(); }
+    else { from = deskFront(d, 0); pts = []; }
+    const side = seat === HEAD ? -1 : from.x < -0.01 ? -1 : from.x > 0.01 ? 1 : (s.x < 0 ? -1 : 1);
+    const a1 = aisleOf(from);
+    if (d.state?.dept === 'exec') pts.push(from.clone(), V(side * LANE_X, from.z));   // past the back row, never through a cluster
+    else pts.push(from.clone(), V(from.x, a1), V(side * LANE_X, a1));
+    pts.push(V(side * LANE_X, WAR.z), V(WAR.x + side * (WAR.w / 2 + 0.6), WAR.z), V(WAR.x + side * (WAR.w / 2 - 0.6), WAR.z));
+    if (seat.lane != null) pts.push(V(WAR.x + side * (WAR.w / 2 - 0.6), WAR.z + seat.lane), V(s.x, WAR.z + seat.lane));
+    pts.push(s);
+    return pts;
+  }
+  function startWalk(id, target, kind, label, path = null) {
     const d = desks[id];
-    if (!d || d.walk || reducedMotion || low || !d.state || d.state.status === 'working' || d.state.dept === 'exec') return false;
+    if (!d || d.walk || reducedMotion || low || !d.state) return false;
+    if (kind !== 'meeting' && (d.state.status === 'working' || d.state.dept === 'exec')) return false;
     const start = deskFront(d, 0);
     d.person.updateWorldMatrix(true, false);
     scene.attach(d.person);
-    d.person.position.copy(start); d.person.position.y = 0.39; standPose(d);
+    d.person.position.copy(start); standPose(d);
+    d.person.position.y = groundY(start.x, start.z) + 0.39;
     d.paper.visible = kind === 'handoff';
     d.paper.position.set(0.18, 1.12, 0.22); d.paper.rotation.set(-0.3, 0, 0);
-    d.walk = { kind, label, path: routeTo(start, target), i: 0, back: false, wait: kind === 'handoff' ? 2.2 : 4 + Math.random() * 3, waited: 0, start };
+    d.walk = { kind, label, path: path || routeTo(start.setY(0), target), i: 0, back: false, wait: kind === 'handoff' ? 2.2 : 4 + Math.random() * 3, waited: 0, start };
     return true;
   }
+  // Head back the way we came.
+  function turnBack(d) {
+    const w = d.walk; if (w.back) return;
+    w.back = true; w.seated = false; standPose(d);
+    w.path = [d.person.position.clone().setY(0), ...w.path.slice(0, w.i + 1).reverse()]; w.i = 0;
+  }
+  function meetPose(d) { for (const l of d.legs) { l.hip.rotation.x = 0; l.knee.rotation.x = Math.PI / 2; } d.armL.position.set(-0.2, 0.92, 0.2); d.armR.position.set(0.2, 0.92, 0.2); d.armL.rotation.x = d.armR.rotation.x = 0.55; d.person.position.y = 0; }
   function endWalk(d) {
     d.group.attach(d.person); seatPose(d); d.paper.visible = false;
     d.paper.position.set(0, 1.02, 0.36); d.paper.rotation.set(-1.0, 0, 0);
@@ -432,11 +576,22 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
   }
   function stepWalk(d, dt, time) {
     const w = d.walk;
-    if (d.state?.status === 'working' && !w.back) { w.back = true; w.path = routeTo(d.person.position.clone().setY(0), w.start); w.i = 0; }
+    const inMeeting = w.kind === 'meeting' && meetingLive() && meeting.id === w.meetingId && meeting.attendees.includes(d.id);
+    if (w.kind === 'meeting' && !inMeeting) turnBack(d);
+    if (d.state?.status === 'working' && !w.back && !(w.kind === 'meeting' && d.id === 'manager')) turnBack(d);
     const target = w.path[w.i + 1];
     if (!target) {
+      if (!w.back && w.kind === 'meeting') {
+        if (!w.seated) { w.seated = true; const s = w.seat; d.person.position.set(WAR.x + s.x, 0, WAR.z + s.z); d.person.rotation.set(0, s.yaw, 0); meetPose(d); }
+        // Seated at the table. The current speaker (last line on the record) turns to the room and gestures.
+        const talking = meeting?.speaking === d.id;
+        d.headG.rotation.y = talking ? Math.sin(time * 1.3 + d.phase) * 0.35 : Math.sin(time * 0.3 + d.phase) * 0.12;
+        d.headG.rotation.x = talking ? 0.02 : 0.1;
+        d.armR.rotation.x = talking ? 0.9 + Math.sin(time * 3.2) * 0.35 : 0.55;
+        return;
+      }
       if (!w.back) { w.waited += dt; d.paper.visible = w.kind === 'handoff' && w.waited < w.wait * 0.5; if (w.waited < w.wait) { for (const l of d.legs) { l.hip.rotation.x = Math.PI / 2; l.knee.rotation.x = 0; } return; }
-        w.back = true; w.path = routeTo(d.person.position.clone().setY(0), w.start); w.i = 0; return; }
+        turnBack(d); return; }
       endWalk(d); return;
     }
     tmpV.copy(target).sub(d.person.position).setY(0);
@@ -444,7 +599,7 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     if (dist < 0.05) { w.i++; return; }
     const stepLen = Math.min(dist, SPEED * dt);
     d.person.position.addScaledVector(tmpV.normalize(), stepLen);
-    d.person.position.y = 0.39 + Math.abs(Math.sin(time * 9)) * 0.03;
+    d.person.position.y = groundY(d.person.position.x, d.person.position.z) + 0.39 + Math.abs(Math.sin(time * 9)) * 0.03;
     const yaw = Math.atan2(tmpV.x, tmpV.z);
     d.person.rotation.set(0, yaw, 0);
     const sw = Math.sin(time * 9 + d.phase);
@@ -458,15 +613,35 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     nextBreak = time + 5 + Math.random() * 6;
     const walking = Object.values(desks).filter((d) => d.walk?.kind === 'break').length;
     if (walking >= 3) return;
-    const idle = Object.values(desks).filter((d) => !d.walk && d.state?.status === 'idle' && d.state.dept !== 'exec');
+    const busy = meetingLive() ? new Set(meeting.attendees) : null;
+    const idle = Object.values(desks).filter((d) => !d.walk && d.state?.status === 'idle' && d.state.dept !== 'exec' && !busy?.has(d.id));
     if (!idle.length) return;
     const d = idle[Math.floor(Math.random() * idle.length)];
     const spot = d.home.x < 0 ? BREAK.coffee : BREAK.water;
     startWalk(d.id, spot.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.5, 0, (Math.random() - 0.5) * 3)), 'break', d.home.x < 0 ? 'coffee' : 'water');
   }
 
+  // ---------- the morning meeting ----------
+  let meeting = null, meetingKey = '';
+  const meetingLive = () => !!(meeting && meeting.inRoom && Date.now() < meeting.until);
+  // Seat everyone in the record: Big Boss at the head, leads around the table in the order they speak.
+  function syncMeeting() {
+    const live = meetingLive();
+    drawWarSign(live && meeting.phase === 'in_session'); warLabel();
+    if (!live) return;
+    let i = 0;
+    for (const id of meeting.attendees) {
+      const d = desks[id]; if (!d) continue;
+      const seat = id === 'manager' ? HEAD : SEATS[i++ % SEATS.length];
+      if (d.walk?.kind === 'meeting') continue;
+      if (d.walk) continue;                                          // finishing a handoff or a break first
+      if (id !== 'manager' && d.state?.status === 'working') continue; // working: joins from the desk
+      if (startWalk(id, null, 'meeting', 'morning meeting', routeToSeat(d, seat))) { d.walk.seat = seat; d.walk.meetingId = meeting.id; }
+    }
+  }
+
   // ---------- camera ----------
-  const OVERVIEW = { pos: new THREE.Vector3(0, 36, 47), look: new THREE.Vector3(0, 0, -5) };
+  const OVERVIEW = { pos: new THREE.Vector3(0, 37, 49), look: new THREE.Vector3(0, 0, -4) };
   const cam = { pos: OVERVIEW.pos.clone(), look: OVERVIEW.look.clone() };
   let target = { pos: OVERVIEW.pos.clone(), look: OVERVIEW.look.clone() };
   let orbit = { yaw: 0, pitch: 0, zoom: 1, panX: 0, panZ: 0 };
@@ -489,6 +664,8 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     // Over-the-shoulder: behind and above the agent, looking at them and their status screen.
     setTarget(p.clone().add(dir.clone().multiplyScalar(-3.4)).add(new THREE.Vector3(0, 2.0, 0)), p.clone().add(dir.clone().multiplyScalar(0.4)).add(new THREE.Vector3(0, -0.7, 0)), `agent:${id}`);
   };
+  api.focusWar = () => setTarget(new THREE.Vector3(WAR.x + 7, 7.2, WAR.z + 9), new THREE.Vector3(WAR.x - 0.5, 0.9, WAR.z - 0.3), 'war');
+  api.setSky = (p) => sky.setPhase(p);   // day | dusk | night (follows your clock by default)
   api.focusExec = () => setTarget(new THREE.Vector3(EXEC.x, EXEC.top + 9, EXEC.z + 17), new THREE.Vector3(EXEC.x, EXEC.top + 1.2, EXEC.z - 0.5), 'exec');
   api.focusWall = (id) => {
     const w = walls[id]; if (!w) return;
@@ -528,6 +705,7 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     else if (p.type === 'dept') on.dept?.(p.id);
     else if (p.type === 'wall') on.wall?.(p.id);
     else if (p.type === 'exec') on.exec?.(p.id);
+    else if (p.type === 'war') on.war?.(p.id);
   });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); if (isFixed) return; orbit.zoom = Math.max(0.35, Math.min(1.7, orbit.zoom * (e.deltaY > 0 ? 1.08 : 0.93))); }, { passive: false });
@@ -595,6 +773,12 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
       let x = 20; for (const [txt, col] of data.tickerText.split('\u241e').map((t) => t.split('\u241f'))) { g.fillStyle = col || '#9fe3b5'; g.fillText(txt, x, H / 2); x += g.measureText(txt).width + 60; if (x > W) break; }
       led.tex.needsUpdate = true;
     }
+    if (data.meeting !== undefined) {
+      meeting = data.meeting;
+      const mk = JSON.stringify(meeting ? [meeting.id, meeting.phase, meeting.lines.length, meeting.focus, meeting.decisions.length] : null);
+      if (mk !== meetingKey) { meetingKey = mk; drawWarScreen(meeting); }
+      syncMeeting();
+    }
     lastData = data;
     if (current.mode === 'workflow') { for (const h of (data.recentHandoffs || []).slice(0, 12)) addArc(h, { persistent: true }); }
   };
@@ -604,6 +788,10 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
   };
   api.select = (id) => { current.selected = id; };
   api.setAmbient = (v) => { ambientOn = !!v; };
+  // For tests on slow software rendering: advance walking by `sec` seconds.
+  api.fastForward = (sec = 10) => { for (let t = 0; t < sec; t += 0.05) { if (meeting) syncMeeting(); for (const d of Object.values(desks)) if (d.walk) stepWalk(d, 0.05, t); } };
+  // For tests: who is walking where, and the meeting as the floor sees it.
+  api.debugWalks = () => ({ meeting: meeting && { phase: meeting.phase, live: meetingLive(), attendees: meeting.attendees, speaking: meeting.speaking }, walks: Object.values(desks).filter((d) => d.walk).map((d) => ({ id: d.id, kind: d.walk.kind, step: d.walk.i, of: d.walk.path.length, seated: !!d.walk.seated, back: d.walk.back, at: d.person.position.toArray().map((v) => +v.toFixed(1)) })) });
   // Redraw every canvas once the web fonts have loaded, so text isn't stuck in a fallback font.
   let lastData = null;
   document.fonts?.ready?.then(() => {
@@ -611,7 +799,7 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
     for (const c of Object.values(clusters)) if (c.sign) c.sign.key = '';
     for (const w of Object.values(walls)) w.key = '';
     for (const e of Object.values(execScreens)) e.key = '';
-    led.key = ''; drawExecSign();
+    led.key = ''; drawExecSign(); meetingKey = ''; drawWarScreen(meeting); drawWarSign(meetingLive() && meeting?.phase === 'in_session', true);
     if (lastData) api.update({ ...lastData, newHandoffs: [] });
   });
 
@@ -631,7 +819,7 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
   const ro = new ResizeObserver(resize); ro.observe(canvas.parentElement); resize();
 
   const v = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
-  let last = 0, running = true, t0 = performance.now();
+  let last = 0, running = true, t0 = performance.now(), lastSync = 0;
   const relevant = (d) => {
     const m = current.mode;
     if (m === 'approvals') return d.status === 'needs_approval' || !!d.needsYou;
@@ -676,6 +864,8 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
       if (d.status === 'blocked' || d.status === 'needs_approval') desk.beacon.scale.setScalar((hi ? 1 : 0.6) * (1 + Math.max(0, Math.sin(time * 3)) * 0.5));
     }
     maybeBreak(time);
+    if (time - lastSync > 0.5) { lastSync = time; if (meeting) syncMeeting(); }
+    sky.update(time);
     if (!reducedMotion) { codeTex.offset.y = (time * 0.08) % 1; docTex.offset.y = (time * 0.02) % 1; vidTex.offset.x = (time * 0.05) % 1; led.tex.offset.x = (time * 0.012) % 1; }
     // arcs: travel + fade
     for (let i = arcs.length - 1; i >= 0; i--) {
@@ -703,20 +893,28 @@ export function createFloor({ canvas, labelsEl, on = {}, quality = 'full', reduc
       el.style.display = p.vis ? '' : 'none';
       if (p.vis) { el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`; const sz = size(el); placed.push({ x: p.x - sz.w / 2, y: p.y - sz.h, w: sz.w, h: sz.h }); }
     }
+    if (labelEls.war) {
+      const p = project(WAR_ANCHOR, r); const el = labelEls.war;
+      el.style.display = p.vis ? '' : 'none';
+      if (p.vis) { el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`; const sz = size(el); placed.push({ x: p.x - sz.w / 2, y: p.y - sz.h, w: sz.w, h: sz.h }); }
+    }
     // Desk tags: close-up only (LOD), plus anything needing you or blocked when the room is small.
     let shown = 0;
-    const prio = (id, d) => (current.selected === id ? -1e6 : 0) + (d?.state?.needsYou || d?.state?.status === 'blocked' ? -1e4 : 0) + (d?.walk ? -1e3 : 0);
+    const prio = (id, d) => (current.selected === id ? -1e6 : 0) + (meeting?.speaking === id && d?.walk?.seated ? -1e5 : 0) + (d?.state?.needsYou || d?.state?.status === 'blocked' ? -1e4 : 0) + (d?.walk ? -1e3 : 0);
     const entries = Object.entries(labelEls.desks).map(([id, el]) => [id, el, desks[id], camPos.distanceTo(desks[id]?.anchor || camPos)]).sort((a, b) => (prio(a[0], a[2]) + a[3]) - (prio(b[0], b[2]) + b[3]));
     for (const [id, el, desk, dist] of entries) {
       const d = desk?.state; if (!d) { el.style.display = 'none'; continue; }
-      const near = dist < 17 || (focusKey === 'exec' && d.dept === 'exec');
+      const near = dist < 17 || (focusKey === 'exec' && d.dept === 'exec') || (focusKey === 'war' && desk.walk?.kind === 'meeting');
       const urgent = d.needsYou || d.status === 'blocked';
-      const show = (near || (urgent && dist < 60) || (desk.walk?.kind === 'handoff' && dist < 60) || current.selected === id || (focusKey === 'exec' && d.dept === 'exec')) && relevant(d) && shown < 40;
+      const show = (near || (urgent && dist < 60) || (desk.walk?.kind === 'handoff' && dist < 60) || (meeting?.speaking === id && desk.walk?.seated && dist < 60) || current.selected === id || (focusKey === 'exec' && d.dept === 'exec')) && relevant(d) && shown < 40;
       const p = show ? project(desk.anchor, r) : null;
       if (!p || !p.vis) { el.style.display = 'none'; continue; }
       shown++;
       el.style.display = '';
-      const wk = desk.walk ? (desk.walk.kind === 'break' ? `☕ Idle · on a ${desk.walk.label === 'coffee' ? 'coffee' : 'water'} break` : `📁 Handing off: ${desk.walk.label}`) : '';
+      const inMtg = meetingLive() && meeting.attendees.includes(id);
+      const wk = desk.walk ? (desk.walk.kind === 'break' ? `☕ Idle · on a ${desk.walk.label === 'coffee' ? 'coffee' : 'water'} break`
+        : desk.walk.kind === 'meeting' ? (desk.walk.back ? '↩ Back to desk after the morning meeting' : !desk.walk.seated ? '→ Walking to the morning meeting' : meeting?.speaking === id ? `🗣 Speaking: ${speechOf(id)}` : meeting?.phase === 'wrap_up' ? 'Morning meeting · wrap-up' : 'In the morning meeting')
+        : `📁 Handing off: ${desk.walk.label}`) : inMtg ? '🗣 In the morning meeting (from desk)' : '';
       const wkEl = el.querySelector('.wk'); if (wkEl && wkEl.textContent !== wk) wkEl.textContent = wk;
       el.classList.toggle('mini', !near && current.selected !== id);
       el.classList.toggle('sel', current.selected === id);

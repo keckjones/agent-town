@@ -514,6 +514,34 @@ export function sincePanel(S, ui, ctx) {
   ].join('');
 }
 
+// ---------------------------------------------------------------- War Room (daily morning meeting)
+export function warRoomPanel(S, ui) {
+  const missing = S.missing?.has?.('meetings');
+  const m = F.meetingState(S);
+  const all = S.t('meetings').slice().sort((a, b) => String(b.held_on).localeCompare(String(a.held_on)));
+  const live = m && (m.phase === 'in_session');
+  const dept = (id) => F.deptById[id] || { short: id, accent: '#8592a5' };
+  const phaseChip = !m ? '' : m.phase === 'in_session' ? chip('● In session', 'ok') : m.phase === 'wrap_up' ? chip('Wrap-up', 'ok') : m.phase === 'failed' ? chip('Failed', 'bad') : m.phase === 'stalled' ? chip('Stalled', 'warn') : chip('Done', '');
+  const lineRow = (l) => `<div class="mtg-line" style="--c:${dept(l.dept).accent}"><div class="who">${refBtn(`agent:${l.agent}`, agentName(S, l.agent))}<span class="faint"> · ${esc(dept(l.dept).short)}</span></div><div class="said">${esc(l.said)}</div>${(l.asks || []).filter((a) => a.request_id).map((a) => `<div class="meta">Asked another team: ${refBtn(`request:${a.request_id}`, a.title || a.need)}</div>`).join('')}</div>`;
+  return [
+    `<div class="plain"><b>In plain English:</b> every morning at 8:05 the lead of each department and the Big Boss meet in the War Room in the middle of the floor. Each lead says what happened since yesterday, what is stuck, and what is waiting on you, using only what's in your records. If a team needs help from another team (a web page, posts, research…), it asks right there, and that becomes a real team request you can follow. The Big Boss closes with today's focus. Nothing public, paid or irreversible comes out of a meeting: those still wait in your Approvals.</div>`,
+    missing ? `<div class="card warn">Run <b>supabase/010_war_room.sql</b> in the Supabase SQL Editor to turn on the daily meeting.</div>` : '',
+    `<div class="row"><button class="btn primary sm" data-act="meeting-now" ${live ? 'disabled' : ''}>${live ? 'Meeting in session…' : m && m.held_on === new Date().toLocaleDateString('en-CA') && m.status === 'done' ? 'Hold it again now' : 'Start the meeting now'}</button><button class="btn sm" data-act="focus-war">Watch the room</button></div>`,
+    !m ? '<p class="muted">No meeting on record yet. The first one runs at 8:05 AM, or start one now.</p>' : [
+      `<div class="card"><div class="row between"><b>Morning meeting · ${esc(m.held_on)}</b>${phaseChip}</div>
+        <div class="meta">Started ${ct(m.started_at)}${m.ended_at ? ` · ended ${ct(m.ended_at)}` : ''} · ${m.attendees.length} in the room${m.document_id ? ` · ${refBtn(`document:${m.document_id}`, 'Meeting notes')}` : ''}</div>
+        ${m.error ? `<div class="down">${esc(m.error)}</div>` : ''}
+        ${m.focus ? `<h4 style="margin-top:10px">Today's focus</h4><p>${esc(m.focus)}</p>` : ''}
+        ${m.plain_english ? `<p>${esc(m.plain_english)}</p>` : ''}
+        ${m.decisions.length ? `<h4>Decisions</h4><ul>${m.decisions.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}</div>`,
+      section(`Around the room (${m.lines.length}${live ? ', still talking' : ''})`, m.lines.length ? m.lines.map(lineRow).join('') : '<p class="muted">The leads are sitting down…</p>'),
+      m.requests.length ? section(`Teams asked each other for (${m.requests.length})`, `<ul class="src">${m.requests.map((r) => `<li>${refBtn(`request:${r.id}`, r.title)} <span class="faint">${esc(agentName(S, r.from))} → ${esc(agentName(S, r.to))}</span></li>`).join('')}</ul>`) : '',
+      m.source ? `<p class="meta">${esc(m.source)}</p>` : '',
+    ].join(''),
+    all.length > 1 ? section('Earlier meetings', all.slice(1, 10).map((x) => `<details class="card"><summary class="row between" style="cursor:pointer"><b>${esc(x.held_on)}</b><span class="meta">${esc(x.notes?.focus || x.status)}</span></summary>${(x.notes?.lines || []).map(lineRow).join('')}${(x.notes?.decisions || []).length ? `<h4>Decisions</h4><ul>${x.notes.decisions.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}</details>`).join('')) : '',
+  ].join('');
+}
+
 export const VIEWS = {
   desk: { name: (S, ui) => S.t('agents').find((a) => a.id === ui.sub?.agent)?.name || 'Agent', accent: '#3aa0ff', render: deskPanel },
   record: { name: (S, ui) => { const [t, i] = String(ui.sub?.ref || '').split(':'); return `${({ approval: 'Approval', workflow: 'Workflow', task: 'Task', event: 'Event', order: 'Order', content: 'Content', ledger: 'Ledger entry', document: 'Document', call: 'Call', prospect: 'Lead', deal: 'Deal', deadline: 'Deadline', brand: 'Brand', product: 'Product', opportunity: 'Opportunity' })[t] || 'Record'} #${i || ''}`; }, accent: '#8592a5', render: recordPanel },
@@ -528,4 +556,5 @@ export const VIEWS = {
   media: { name: () => 'Content Studio', accent: '#ff8bd1', render: contentPanel },
   team: { name: () => 'Projects & Team Requests', accent: '#f2c14e', render: teamPanel },
   links: { name: () => 'Live Links & Analytics', accent: '#7be0a8', render: linksPanel },
+  warroom: { name: () => 'War Room · Morning Meeting', accent: '#f2c14e', render: warRoomPanel },
 };

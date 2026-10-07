@@ -15,6 +15,8 @@ Your computer isn't involved once it's set up.
 | **Executive Office** (elevated glass office) | The **Big Boss Manager**, which is the existing Executive Orchestrator (agent `manager`), plus CEO agents once a brand earns a promotion. It has a briefing (now, since your last visit, money, blocked, needs approval, plan on record) and **Talk to the Big Boss**, which answers only from your records. The Big Boss can't approve, spend, or change permissions. |
 | **Desk clusters** | One per business: Agency, Sports, Etsy, Dropshipping, Real Estate, Brands/Social/Video, Ventures, Customers, Finance, Risk & Ops. Every agent has a desk with a status light, a status screen and a tag. |
 | **Five display walls** | Business performance, Sales activity, Commerce & fulfillment, Content operations, Attention required. Click a wall to expand it. Pipeline is always labeled as not revenue. |
+| **War Room** (glass room in the middle of the floor) | The daily **morning meeting**. At 8:05 AM the lead of each department and the Big Boss walk in and sit down. Each lead reports from the records (what finished, what failed, what's waiting on you, money that actually came in), and can ask another team for help. Those asks become real team requests (max 3 per meeting). The Big Boss closes with today's focus and decisions. Notes are saved as a document. Press **R** or click the room to read it, or **Start the meeting now**. |
+| **The view** | A high floor of a Manhattan tower: floor-to-ceiling windows with the city outside. Sky and window lights follow your clock (day, dusk, night). Scenery only; it never shows data. |
 | **Ticker** | Recorded events only. Duplicates are collapsed and routine progress is hidden by default. Filter by business, priority or type. Click any item to open its record. |
 
 **Movement** is tied to records too: when a handoff is recorded, the agent who handed off walks the folder to the next desk; idle agents sometimes take a coffee or water break (their tag says "Idle · on a break"; turn breaks off with the **Breaks** button). A working agent never leaves its desk.
@@ -56,7 +58,7 @@ Controls on the desk: approve or edit, pause the agent, retry a failed task, rea
 
 **Command bar** (`/`): type things like "show blocked orders", "open today's calls", "pause dropship", or "what changed". Anything else goes to the Big Boss as a question. Commands use the same controls and approvals as the buttons.
 
-Other shortcuts: E = Executive Office, G = All Agents monitor, T = today's timeline, 1–0 = stations, P = pause all, Esc = back/close.
+Other shortcuts: E = Executive Office, R = War Room, G = All Agents monitor, T = today's timeline, 1–0 = stations, P = pause all, Esc = back/close.
 
 You can also save camera views, lock the camera, and choose the display: 3D full, 3D simplified, or 2D cards (the default on phones). Sound alerts are off by default. `?demo` shows an isolated sample floor where nothing is real or sent.
 
@@ -78,6 +80,8 @@ You can also save camera views, lock the camera, and choose the display: 3D full
    6. `supabase/006_plain_english.sql` (plain-English explanations on approval cards)
    7. `supabase/007_collaboration.sql` (agents working together: projects, team requests, hosted landing pages)
    8. `supabase/008_fast_lane.sql` (express lane so your own requests never wait behind background jobs)
+   9. `supabase/009_links_analytics.sql` (a live link for everything published, plus visit/click analytics)
+   10. `supabase/010_war_room.sql` (the daily morning meeting in the War Room)
 
    The dashboard shows a red "Database update needed" banner naming any file you've missed.
 3. Create your login: **Authentication → Users → Add user**. Tick **Auto Confirm User**. Then turn off "Allow new users to sign up".
@@ -108,7 +112,7 @@ You can also save camera views, lock the camera, and choose the display: 3D full
 | `RENTCAST_API_KEY` | Real estate values and comps |
 | `SPORTS_SUPABASE_URL`, `SPORTS_SUPABASE_ANON_KEY`, `SPORTS_EMAIL`, `SPORTS_PASSWORD`, `SPORTS_SITE_URL` | KJ's Picks official picks feed |
 | `BOOKING_URL`, `DASHBOARD_URL` | Links in emails and texts |
-| Optional | `CLAUDE_MODEL`, `CLAUDE_CHEAP_MODEL`, `MANAGER_CRON`, `CONCURRENCY`, `TASK_TIMEOUT_MIN` |
+| Optional | `CLAUDE_MODEL`, `CLAUDE_CHEAP_MODEL`, `MANAGER_CRON`, `MEETING_CRON` (default `5 8 * * *`), `CONCURRENCY`, `TASK_TIMEOUT_MIN` |
 
 **Never paste keys into chat or commit them to GitHub.** Secrets live only in Railway Variables. OAuth tokens are stored in a server-only database table that the dashboard can't read.
 

@@ -48,12 +48,13 @@ export const VERBS = {
   propose_brand: 'Researching and proposing a brand', prepare_accounts: 'Preparing account setup checklists', check_accounts: 'Checking account connections',
   plan_calendar: 'Planning the content calendar', write_script: 'Researching and writing a script', produce: 'Producing a video', edit: 'Editing a video',
   package: 'Writing title and description', review: 'Quality-checking content', publish_due: 'Publishing scheduled content', measure: 'Measuring published content',
+  morning_meeting: 'Running the morning meeting in the War Room', plan_idea: 'Planning your idea with the team', build_site: 'Building a landing page',
   check_comments: 'Reading comments', evaluate_brands: 'Checking brands against success criteria', brand_report: 'Writing a brand operating report',
 };
 
 // Recurring jobs from worker/src/index.js. Shown as "next scheduled action" only for what the code really schedules.
 export const SCHEDULES = {
-  manager: 'Planning meeting on its schedule (MANAGER_CRON)', support: 'Reads the inbox every 5 minutes', postmaster: 'Follow-up check hourly at :07',
+  manager: 'Morning meeting in the War Room daily 8:05 AM (MEETING_CRON); planning on MANAGER_CRON', support: 'Reads the inbox every 5 minutes', postmaster: 'Follow-up check hourly at :07',
   fulfillment: 'Order sync every 30 minutes', sports: 'Pick sync hourly at :12 (when connected)', risk: 'Risk check hourly at :20', finance: 'Morning text at the time you set',
   ds_orders: 'Tracking check every 30 minutes (when Shopify is connected)', learning: 'Mondays 6:00 AM', capital: 'Mondays 6:15 AM', improve: 'Mondays 6:30 AM',
   publisher: 'Publishing check every 10 minutes', growth: 'Metrics daily 7:40 AM; brand review Mondays 6:45 AM', community: 'Comments hourly at :25', account_prov: 'Account check every 6 hours',
@@ -488,4 +489,28 @@ export function parseCommand(text) {
   if (/agents|who.*(working|doing)|monitor/.test(t)) return { action: 'monitor', label: 'Open All Agents monitor' };
   if (dept) return { action: 'dept', args: { id: dept.id }, label: `Go to ${dept.name}` };
   return { action: 'ask', label: `Ask the Big Boss: "${text.trim().slice(0, 60)}"` };
+}
+
+// ---------------------------------------------------------------- War Room
+// The daily morning meeting comes from the `meetings` table only. Agents are shown in the War Room while the
+// meeting row is in session, and for a few minutes after it ends (labeled "wrap-up"). Nothing is staged.
+export const MEETING_WRAP_MS = 5 * 60000;
+const MEETING_STALE_MS = 20 * 60000;
+export function meetingState(S, now = Date.now()) {
+  const rows = S.t('meetings');
+  const m = rows.slice().sort((a, b) => String(b.held_on).localeCompare(String(a.held_on)) || ms(b.started_at) - ms(a.started_at))[0];
+  if (!m) return null;
+  const lines = m.notes?.lines || [];
+  const ended = m.ended_at ? ms(m.ended_at) : 0;
+  const inSession = m.status === 'in_session' && now - ms(m.started_at) < MEETING_STALE_MS;
+  const wrap = !inSession && m.status === 'done' && ended && now - ended < MEETING_WRAP_MS;
+  return {
+    id: m.id, held_on: m.held_on, status: m.status, started_at: m.started_at, ended_at: m.ended_at, error: m.error,
+    phase: inSession ? 'in_session' : wrap ? 'wrap_up' : m.status === 'in_session' ? 'stalled' : m.status,
+    until: inSession ? ms(m.started_at) + MEETING_STALE_MS : wrap ? ended + MEETING_WRAP_MS : 0,
+    inRoom: !!(inSession || wrap), attendees: m.attendees || [], lines,
+    speaking: inSession ? (lines.length ? lines[lines.length - 1].agent : 'manager') : null,
+    focus: m.notes?.focus || '', decisions: m.notes?.decisions || [], requests: m.notes?.requests || [], plain_english: m.notes?.plain_english || '',
+    source: m.notes?.source || '', document_id: m.document_id, history: rows.length,
+  };
 }

@@ -83,7 +83,7 @@ function renderRail() {
     const badge = id === 'approvals' && need ? `<span class="badge">${need}</span>` : id === 'monitor' && blocked ? `<span class="badge red">${blocked}</span>`
       : s.division && paused.has(s.division) ? '<span class="chip warn">paused</span>' : w?.blocked ? `<span class="badge red">${w.blocked}</span>` : w?.working ? `<span class="wk">▶${w.working}</span>` : s.key ? `<span class="key">${s.key.toUpperCase()}</span>` : '';
     return `<button class="station-btn" data-act="goto" data-id="${id}" style="--accent:${s.accent}" aria-current="${ui.station === id}"><span class="glyph"></span><span>${esc(s.name)}</span>${badge}</button>`; }).join('')}`;
-  $('#rail').innerHTML = group('Command', ['overview', 'team', 'links', 'approvals', 'monitor', 'timeline']) + group('Businesses', ['agency', 'sports', 'etsy', 'dropship', 'realestate', 'media']) + group('Operations', ['ventures', 'customers', 'finance', 'hq', 'setup']);
+  $('#rail').innerHTML = group('Command', ['overview', 'warroom', 'team', 'links', 'approvals', 'monitor', 'timeline']) + group('Businesses', ['agency', 'sports', 'etsy', 'dropship', 'realestate', 'media']) + group('Operations', ['ventures', 'customers', 'finance', 'hq', 'setup']);
 }
 
 function renderTop() {
@@ -115,6 +115,7 @@ function migrationsNeeded() {
   if (ap && !('explain' in ap)) out.push('006_plain_english.sql');
   if (S.missing.has('work_requests')) out.push('007_collaboration.sql');
   if (S.missing.has('published_links')) out.push('009_links_analytics.sql');
+  if (S.missing.has('meetings')) out.push('010_war_room.sql');
   return out;
 }
 function renderMigrate() {
@@ -200,7 +201,7 @@ function floorData() {
   }
   firstFloorUpdate = false;
   const tick = F.ticker(S, { priority: 'important' }, 14).map((e) => `${e.deptName.toUpperCase()} · ${e.agentName}: ${e.text}\u241f${e.level === 'error' ? '#ff7b7b' : e.level === 'warn' ? '#f2c14e' : e.level === 'success' ? '#7be0a8' : '#cfe0ff'}`).join('\u241e');
-  return { desks: c.desks, workload: c.workload, walls: wallData(c), exec: execScreens(c), newHandoffs: fresh, recentHandoffs: all.filter((h) => Date.now() - new Date(h.at) < 864e5), tickerText: (S.demo ? 'DEMO DATA\u241f#f2c14e\u241e' : '') + tick };
+  return { desks: c.desks, workload: c.workload, walls: wallData(c), exec: execScreens(c), newHandoffs: fresh, meeting: F.meetingState(S), recentHandoffs: all.filter((h) => Date.now() - new Date(h.at) < 864e5), tickerText: (S.demo ? 'DEMO DATA\u241f#f2c14e\u241e' : '') + tick };
 }
 
 function renderFlat() {
@@ -232,7 +233,7 @@ async function startFloor() {
     const mod = await import('./floor.js');
     if (!mod.webglAvailable()) { useFlat('WebGL is not available on this device, so department cards are shown.'); renderCtrl(); return; }
     floor = mod.createFloor({ canvas: $('#floor'), labelsEl: $('#labels'), quality: mode, reducedMotion: !!reduced, fixed: !!prefs.fixedCam, ambient: prefs.ambient !== false,
-      on: { agent: (id) => openDesk(id), dept: (id) => go(stationForDept(id)), wall: (id) => go('wall', { sub: { wall: id } }), exec: () => go('overview'), ref: (r) => openRef(r) } });
+      on: { agent: (id) => openDesk(id), dept: (id) => go(stationForDept(id)), wall: (id) => go('wall', { sub: { wall: id } }), exec: () => go('overview'), war: () => go('warroom'), ref: (r) => openRef(r) } });
     floor.update(floorData());
     window.__floor = floor;
     floor.setMode(ui.mode);
@@ -261,6 +262,7 @@ function focusFor(id) {
   if (id === 'desk') return floor.focusAgent(ui.sub?.agent);
   if (id === 'wall') return floor.focusWall(ui.sub?.wall);
   if (id === 'overview') return floor.focusExec();
+  if (id === 'warroom') return floor.focusWar();
   if (s?.dept) return floor.focusDept(s.dept);
 }
 
@@ -544,6 +546,12 @@ const ACTIONS = {
     if (a.type === 'start_project') { const p = await S.insert('team_projects', { title: String(a.idea || '').slice(0, 80), idea: String(a.idea || ''), source: 'owner' }); await S.command('plan_idea', { project_id: p.id }); if (!S.demo) toast('The Big Boss is planning it now (usually 10–20 seconds).'); go('team'); return; }
   },
   async 'check-integrations'() { await S.command('check_integrations'); if (!S.demo) toast('Re-checking connections'); },
+  async 'meeting-now'() {
+    if (S.demo) { S.startMeeting?.(); return; }
+    await S.command('run_task', { agent: 'manager', kind: 'morning_meeting', input: { force: true } });
+    toast('Calling the team into the War Room…');
+  },
+  'focus-war'() { floor?.focusWar(); },
   async 'refresh-links'() { await S.command('refresh_links'); if (!S.demo) toast('Refreshing numbers from YouTube, Etsy and your pages…'); },
   async 'link-status'(d) { await S.update('published_links', { id: Number(d.id) }, { status: d.status }); if (!S.demo) toast(d.status === 'removed' ? 'Marked as taken down' : 'Marked live'); },
   async 'gmail-connect'() { await S.command('gmail_connect'); if (!S.demo) toast('Preparing a Google sign-in link…'); },

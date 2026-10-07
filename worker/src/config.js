@@ -114,6 +114,7 @@ export const config = {
   bookingUrl: clean(process.env.BOOKING_URL),
 
   managerCron: process.env.MANAGER_CRON || '0 */3 * * *', // every 3 hours
+  meetingCron: process.env.MEETING_CRON || '5 8 * * *',   // the daily War Room meeting (8:05 AM local)
   pollSeconds: Number(process.env.POLL_SECONDS || 3),
   timezone: process.env.TZ || 'America/Chicago',
 };
